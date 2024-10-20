@@ -1,7 +1,9 @@
 Goal: make a opperating system using nasm 
 
 
-OS consists of parts: 
+OS image consitsts of parts: 
 MBR 
 GPT 
 FAT file system 
+
+OS itself is in the FAT file system 

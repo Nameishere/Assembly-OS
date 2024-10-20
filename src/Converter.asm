@@ -18,12 +18,13 @@ fixed_vars:
     gpt_table_lbas equ GPT_TABLE_SIZE / lba_size
     padding equ (ALIGNMENT*2 + (lba_size * ((gpt_table_lbas*2) + 1 + 2)))
     image_size equ esp_size + data_size + padding
-    image_size_lbas equ (image_size + (lba_size -1))/lba_size 
+    ;image_size equ esp_size + data_size + 1024*1024
+    image_size_lbas equ (image_size + (lba_size -1))/lba_size ;bytes to lbas
     mbr_image_lbas equ image_size_lbas - 1
     align_lba equ ALIGNMENT/lba_size ;and also esp_lba
     esp_lba equ align_lba
-    esp_size_lbas equ (esp_size + (lba_size -1))/lba_size
-    data_size_lbas equ (data_size + (lba_size -1))/lba_size
+    esp_size_lbas equ (esp_size + (lba_size -1))/lba_size ;bytes to lbas
+    data_size_lbas equ (data_size + (lba_size -1))/lba_size ;bytes to lbas
     data_lba equ (esp_lba + esp_size_lbas) - ((esp_lba + esp_size_lbas) % align_lba) + align_lba
 
 
@@ -37,14 +38,13 @@ _start:                ;tell linker entry point
     jmp done
 
 write_mbr:
-    mov r10, Mbr_init.mbr_partition
     mov r9, Mbr_Partiiton1_init
+    mov r10, Mbr_init.mbr_partition
     times 16 call mov_to_var
 
     mov rax, Mbr_init
     times 512 call write_to_file
     ret 
-
 
 write_gpt:
     mov rax, primary_gpt
@@ -180,7 +180,31 @@ write_esp:
     ret 
         
 
+new_guid:
+    call rand
 
+    mov r10, guid
+    mov r9, rand_arr
+    times 16 call mov_to_var
+
+    and guid.time_hi_and_ver, 0b01001111
+    mov guid.time_hi_and_ver, rax
+    or guid.time_hi_and_ver, 0b01000000
+    mov guid.time_hi_and_ver, rax
+
+    or guid.clock_seq_hi_and_res, 0b11000000
+    mov guid.clock_seq_hi_and_res, rax
+    and guid.clock_seq_hi_and_res, 0b11011111
+    mov guid.clock_seq_hi_and_res, rax
+
+
+rand:
+    mov rdi, [rand_arr]
+    mov rsi, 16
+    mov rdx, 0     
+    mov rax, 318
+    syscall
+    ret
 
 mov_to_var:
     mov ax, [r9]
@@ -228,7 +252,6 @@ write_to_file: ;rax is pointer to start of stuff to write to file
     inc rax
     ret
 
-new_guid:
 
 
 write_zero_to_file: ;rax is pointer to start of stuff to write to file 
@@ -265,8 +288,10 @@ section .data
     ;Vars 
     cluster dd 0
 
+    ;rand_arr
+    randarr times 16 db 0x00
 
-
+; Master boot record 
 Mbr_Partiiton1_init:
     .boot_indicator: db 0
     .starting_chs: db 0x00, 0x02, 0x00
@@ -277,11 +302,12 @@ Mbr_Partiiton1_init:
 
     mbr_partition_size equ $-Mbr_Partiiton1_init
 
+; MBR partition 
 Mbr_init:
     .boot_code: times 440 db 0x00
-    .mbr_signature: times 4 db 0x00 
-    .unknown: times 2 db 0x00
-    .mbr_partition: times mbr_partition_size*4 db 0x00
+    .mbr_signature: dd 0x00 
+    .unknown: dw 0x00
+    .mbr_partition: times mbr_partition_size*4 db 0x00 ;set to partition later
     .boot_signature: dw 0xAA55
 
 
@@ -302,17 +328,17 @@ primary_gpt:
     .signature: db "EFI PART"
     .revision: dd 0x00010000
     .header_size: dd 92
-    .header_crc32: dd 0
+    .header_crc32: dd 0 ;calculate later 
     .reserved_1: dd 0
     .my_lba: dq 1
     .alternate_lba: dq image_size_lbas - 1
     .first_usable_lba: dq 1 + 1 + gpt_table_lbas
     .last_usable_lba: dq image_size_lbas - 1 - gpt_table_lbas
-    .disk_guid: times guid_size db 0x00
+    .disk_guid: times guid_size db 0x00 ; set later 
     .partition_table_lba: dq 2
     .number_of_entries: dd 128
     .size_of_entry: dd 128
-    .partition_table_crc32: dd 0
+    .partition_table_crc32: dd 0 ; calculate later 
     .reserved_2: times 512-92 dd 0x00
 
 
