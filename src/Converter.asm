@@ -47,6 +47,13 @@ write_mbr:
     ret 
 
 write_gpt:
+
+    call new_guid
+    mov rax, primary_gpt.disk_guid
+    mov r9, guid
+    mov r10, primary_gpt.disk_guid
+    times 16 call mov_to_var
+
     mov rax, primary_gpt
     times 512 call write_to_file
 
@@ -181,25 +188,151 @@ write_esp:
         
 
 new_guid:
+    ;note this may not work as not seeded the random generation 
+    ; with time ( havn't reaserched how it is meant to work)
     call rand
 
     mov r10, guid
     mov r9, rand_arr
     times 16 call mov_to_var
+    mov bx, 0b0100111111111111
+    mov ax, [guid.time_hi_and_ver]
+    and ax, bx
+    mov bx, 0b0100000000000000
+    or ax, bx
+    mov [guid.time_hi_and_ver], ax
 
-    and guid.time_hi_and_ver, 0b01001111
-    mov guid.time_hi_and_ver, rax
-    or guid.time_hi_and_ver, 0b01000000
-    mov guid.time_hi_and_ver, rax
+    mov bl, 0b11000000
+    mov al, [guid.clock_seq_hi_and_res]
+    or al, bl
+    mov bl, 0b11011111
+    and al, bl
+    mov [guid.clock_seq_hi_and_res], al
+    ret
 
-    or guid.clock_seq_hi_and_res, 0b11000000
-    mov guid.clock_seq_hi_and_res, rax
-    and guid.clock_seq_hi_and_res, 0b11011111
-    mov guid.clock_seq_hi_and_res, rax
+create_crc32_table:
+    mov eax, 0
+    mov [ntemp], eax
+    .loop1_start:
+    mov eax, [ntemp]
+    mov [ctemp], eax
+    mov eax, 0x00000000
+    mov [ktemp], eax
+    .loop2_start:
 
+    .check1:
+        mov eax, [ctemp]
+        shr eax, 1
+        mov ebx, eax
+        mov eax, 0x3db88320
+        call exponent32
+        mov [ctemp], eax
+
+
+    .check2:
+        mov eax, [ctemp]
+        shr eax, 1
+        mov [ctemp], eax
+
+    mov eax, [ktemp]
+    inc eax
+    mov eax,[ktemp]
+    cmp eax, 8
+
+    jne .loop2_start
+
+    mov rbx, crc_table
+    mov eax, [ntemp]
+    mov ecx, 4
+    mul ecx ;convert to 32 byte indexes 
+    add rax, rbx
+
+    mov rbx, [ctemp]
+    mov [rax], rbx
+
+    mov eax, [ntemp]
+    inc eax
+    mov [ntemp], eax
+    cmp eax, 256
+    jne .loop1_start
+
+    ret
+
+calculate_crc32: ; rax is len, rbx is pointer ;eax is return
+
+    push rax 
+    push rbx 
+    call create_crc32_table
+
+    mov eax, 0xFFFFFFFF
+    mov [ctemp], eax
+
+    mov eax, 0
+    mov [ntemp], eax 
+
+    pop rbx
+    pop rax 
+    mov ecx, eax
+    .loop1_start:
+    push ecx
+
+    mov eax, [ntemp]
+    add rax, rbx
+    push ebx
+    mov ebx, eax
+    mov eax, [ctemp]
+    call exponent32
+    and eax, 0xFF
+    
+    mov rbx, crc_table
+    mov ecx, 4
+    mul ecx ;convert to 32 byte indexes 
+    add rax, rbx
+    mov ebx, [ctemp]
+    shr ebx
+    mov eax, [rax]
+    call exponent32
+    mov [ctemp], eax
+
+
+
+    mov [ctemp], eax
+
+    mov eax, [ntemp]
+    inc eax
+    mov [ntemp], eax
+    pop ebx
+    pop ecx
+    cmp eax, ecx
+    jne .loop1_start
+
+    mov ebx,  0xFFFFFFFF
+    mov eax, [ctemp]
+    call exponent32 
+
+    ret
+
+
+
+exponent32: ;a^n, eax is a, ebx is n returns in eax
+    mov ecx, 0
+    mov edx, eax
+    mov eax, 1
+
+    .start:
+    inc ecx
+    cmp ecx, ebx
+    je .done
+
+    .multiply:
+    mul edx
+    
+    jmp .start
+    .done:
+    ret
 
 rand:
-    mov rdi, [rand_arr]
+    mov rdi, rand_arr
     mov rsi, 16
     mov rdx, 0     
     mov rax, 318
@@ -289,7 +422,8 @@ section .data
     cluster dd 0
 
     ;rand_arr
-    randarr times 16 db 0x00
+    rand_arr times 16 db 0x00
+
 
 ; Master boot record 
 Mbr_Partiiton1_init:
@@ -314,11 +448,11 @@ Mbr_init:
     mbr_size equ $-Mbr_init
 
 guid:
-    .time_lo: dd 0
+    .time_lo: dd 0x47
     .time_mid: dw 0
     .time_hi_and_ver: dw 0
     .clock_seq_hi_and_res: db 0
-    .clock_seq_lo: db 0 
+    .clock_seq_lo: db 0
     .node: times 6 db 0
 
 
@@ -450,6 +584,12 @@ FAT32_Dir_Entry_Short_size equ $ - FAT32_Dir_Entry_Short
 
 
 section .bss
+
+;crc table
+crc_table resd 256 
+ctemp resd 1
+ntemp resd 1
+ktemp resd 1
 
 
 

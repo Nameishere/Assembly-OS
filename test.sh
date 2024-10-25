@@ -1,3 +1,2 @@
-make clean
-make Test_link
-./bin/Test
+sgdisk -O test.hdd
+sgdisk -p test.hdd
