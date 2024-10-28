@@ -37,32 +37,82 @@ _start:                ;tell linker entry point
     call write_esp
     jmp done
 
+
+
 write_mbr:
     mov r9, Mbr_Partiiton1_init
     mov r10, Mbr_init.mbr_partition
-    times 16 call mov_to_var
+    times 15 call mov_to_var
 
     mov rax, Mbr_init
     times 512 call write_to_file
     ret 
 
+
+
 write_gpt:
 
     call new_guid
-    mov rax, primary_gpt.disk_guid
     mov r9, guid
     mov r10, primary_gpt.disk_guid
-    times 16 call mov_to_var
+    times 15 call mov_to_var
+
+    mov r9, guid
+    mov r10, secondary_gpt.disk_guid
+    times 15 call mov_to_var
+
+    call new_guid
+    mov r9, guid
+    mov r10, gpt_data_table.unique_guid
+    times 15 call mov_to_var
+
+    call new_guid
+    mov r9, guid
+    mov r10, gpt_EFI_table.unique_guid
+    times 15 call mov_to_var
+
+    mov r9, data_guid
+    mov r10, gpt_data_table.partition_type_guid  
+    times 15 call mov_to_var
+
+    mov r9, esp_guid
+    mov r10, gpt_EFI_table.partition_type_guid
+    times 15 call mov_to_var
+
+    call write_table
+
+    mov rax, 128*128
+    mov rbx, gpt_table
+    call calculate_crc32
+    mov [primary_gpt.partition_table_crc32], eax
+
+    mov rax, 92
+    mov rbx, primary_gpt
+    call calculate_crc32
+    mov [primary_gpt.header_crc32], eax
+    
 
     mov rax, primary_gpt
     times 512 call write_to_file
 
-    call write_table
+    mov rax, gpt_table
+    times 128*128 call write_to_file
 
     mov rax, (image_size_lbas - 1 - gpt_table_lbas) * lba_size
     call file_seek
 
-    call write_table
+    mov rax, gpt_table
+    times 128*128 call write_to_file
+
+    mov rax, 128*128
+    mov rbx, gpt_table
+    call calculate_crc32
+    mov [secondary_gpt.partition_table_crc32], eax
+
+    mov rax, 92
+    mov rbx, secondary_gpt
+    call calculate_crc32
+    mov [secondary_gpt.header_crc32], eax
 
     mov rax, secondary_gpt
     times 512 call write_to_file
@@ -72,19 +122,16 @@ write_gpt:
 
 
 write_table:
-    mov rax, gpt_EFI_table
-    times 128 call write_to_file
+    mov r9, gpt_EFI_table
+    mov r10, gpt_table
+    times 127 call mov_to_var
 
-    mov rax, gpt_data_table
-    times 128 call write_to_file
-
-    times 128 - 2 call write_to_file_gpt_empty_table
+    mov r9, gpt_data_table
+    mov r10, gpt_table + 128
+    times 127 call mov_to_var
 
     ret
 
-write_to_file_gpt_empty_table:
-    mov rax, gpt_empty_table
-    times 128 call write_to_file    
 
 write_esp:
     mov rax, esp_lba*lba_size
@@ -194,7 +241,7 @@ new_guid:
 
     mov r10, guid
     mov r9, rand_arr
-    times 16 call mov_to_var
+    times 15 call mov_to_var
     mov bx, 0b0100111111111111
     mov ax, [guid.time_hi_and_ver]
     and ax, bx
@@ -211,125 +258,134 @@ new_guid:
     ret
 
 create_crc32_table:
-    mov eax, 0
-    mov [ntemp], eax
+
+    ;set ntemp and ctmp to 0
+    mov eax, 0x00000000
+    mov [ctemp], eax
+    mov [ntemp], eax ;variable in for loop
+
     .loop1_start:
+
+    ;set ctemp to ntemp
     mov eax, [ntemp]
     mov [ctemp], eax
+
+    ;set ktemp to 0 (for loop initialise)
     mov eax, 0x00000000
     mov [ktemp], eax
+
     .loop2_start:
+        mov eax, [ctemp]
+        and eax, 0x00000001
+        cmp eax, 0x00000001
+
+        
+        jne .check2
 
     .check1:
+        ; call test1
         mov eax, [ctemp]
         shr eax, 1
         mov ebx, eax
-        mov eax, 0x3db88320
-        call exponent32
+        mov eax, 0xedb88320
+        xor eax, ebx
         mov [ctemp], eax
-
+        jmp .check_end
 
     .check2:
+        ; call test2
         mov eax, [ctemp]
         shr eax, 1
         mov [ctemp], eax
+    
+    .check_end:
+
 
     mov eax, [ktemp]
     inc eax
-    mov eax,[ktemp]
+    mov [ktemp],eax
     cmp eax, 8
 
-    jne .loop2_start
-
+    jl .loop2_start
+    ; call break
+    
     mov rbx, crc_table
     mov eax, [ntemp]
     mov ecx, 4
     mul ecx ;convert to 32 byte indexes 
     add rax, rbx
 
-    mov rbx, [ctemp]
-    mov [rax], rbx
+    mov ebx, [ctemp]
 
+
+    mov [rax], ebx
+
+    ; mov ebx, [ctemp]
+    ; call print_number
+
+    ;I if n is less than 256 after increment go to start of loop 
     mov eax, [ntemp]
     inc eax
     mov [ntemp], eax
     cmp eax, 256
-    jne .loop1_start
+    jl .loop1_start
 
     ret
 
 calculate_crc32: ; rax is len, rbx is pointer ;eax is return
 
-    push rax 
-    push rbx 
+    mov r10, rax ;r10 is len 
+    mov r9, rbx ; r9 is pointer
+    push r10
+    push r9
     call create_crc32_table
+    pop r9
+    pop r10
 
     mov eax, 0xFFFFFFFF
-    mov [ctemp], eax
+    mov [ctemp], eax ; ctemp is 0xFFFFFFFFL
 
     mov eax, 0
     mov [ntemp], eax 
 
-    pop rbx
-    pop rax 
-    mov ecx, eax
     .loop1_start:
-    push ecx
 
-    mov eax, [ntemp]
-    add rax, rbx
-    push ebx
-    mov ebx, eax
-    mov eax, [ctemp]
-    call exponent32
-    and eax, 0xFF
-    
-    mov rbx, crc_table
+    ;calc start
+    mov eax, [ntemp] ;offset from pointer 
+    mov rbx, r9 ;pointer
+    add rax, rbx ;position in table 
+    mov ebx, [rax] ;value at position in table 
+    mov eax, [ctemp] 
+    xor eax, ebx
+    and eax, 0xFF 
     mov ecx, 4
-    mul ecx ;convert to 32 byte indexes 
-    add rax, rbx
-    mov ebx, [ctemp]
-    shr ebx
-    mov eax, [rax]
-    call exponent32
-    mov [ctemp], eax
+    mul ecx ; eax is offset from pointer in table (32 bit)
+    mov rbx, crc_table ;pointer to table 
+    add rax, rbx ;position in table
+    mov ecx, [rax] ;value at position in table 
 
-
-
-    mov [ctemp], eax
-
-    mov eax, [ntemp]
-    inc eax
-    mov [ntemp], eax
-    pop ebx
-    pop ecx
-    cmp eax, ecx
-    jne .loop1_start
-
-    mov ebx,  0xFFFFFFFF
     mov eax, [ctemp]
-    call exponent32 
+    shr eax, 8 ;(c >> 8)
+    mov ebx, eax
+    mov eax, ecx
+    xor eax, ebx 
+    mov [ctemp], eax ;update c
+
+    ;end of loop 
+    mov eax, [ntemp]
+    inc eax 
+    mov [ntemp], eax 
+    mov rcx, r10
+    cmp eax, ecx ; n < len
+    jl .loop1_start
+
+    ;invert bits for return in eax 
+    mov ebx,  0xFFFFFFFF 
+    mov eax, [ctemp]
+    xor eax, ebx
 
     ret
 
-
-
-exponent32: ;a^n, eax is a, ebx is n returns in eax
-    mov ecx, 0
-    mov edx, eax
-    mov eax, 1
-
-    .start:
-    inc ecx
-    cmp ecx, ebx
-    je .done
-
-    .multiply:
-    mul edx
-    
-    jmp .start
-    .done:
-    ret
 
 rand:
     mov rdi, rand_arr
@@ -369,7 +425,7 @@ open_file:
         mov rdi, [image]
         mov rsi, FALLOC_FL_ZERO_RANGE
         mov rdx, 0
-        mov r10, (image_size_lbas + 5) * lba_size
+        mov r10, (image_size_lbas) * lba_size
         syscall
 
     ret   
@@ -395,6 +451,40 @@ write_zero_to_file: ;rax is pointer to start of stuff to write to file
     syscall            ;call kernel    
     ret
     .zero: db 0x00
+
+
+print_number: ;Code is Done ebx is input
+
+    mov r10, rsp
+    mov r9, rbx
+    mov r8, 0
+
+    mov eax, ebx
+
+    push 0x0A
+
+    .loop:
+    mov edx, 0
+    mov ecx, 10
+    div ecx
+    add edx, 0x30
+    push rdx 
+
+    inc r8
+    cmp r8, 12
+
+    jl .loop
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, rsp
+    mov rdx, 8*13
+    syscall
+
+    mov rsp, r10
+
+    ret
+
 
 
 done: ;Code is Done
@@ -448,32 +538,54 @@ Mbr_init:
     mbr_size equ $-Mbr_init
 
 guid:
-    .time_lo: dd 0x47
+    .time_lo: dd 0x00
     .time_mid: dw 0
     .time_hi_and_ver: dw 0
     .clock_seq_hi_and_res: db 0
     .clock_seq_lo: db 0
     .node: times 6 db 0
 
-
 guid_size equ $-guid
+
+
+data_guid:
+    .time_lo: dd 0xEBD0A0A2
+    .time_mid: dw 0xB9E5
+    .time_hi_and_ver: dw 0x4433
+    .clock_seq_hi_and_res: db 0x87
+    .clock_seq_lo: db 0xC0
+    .node: db 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7
+
+esp_guid:
+    .time_lo: dd 0xC12A7328
+    .time_mid: dw 0xF81F
+    .time_hi_and_ver: dw 0x11D2
+    .clock_seq_hi_and_res: db 0xBA
+    .clock_seq_lo: db 0x4B
+    .node: db 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B
+
+
+
 
 primary_gpt:
     .signature: db "EFI PART"
     .revision: dd 0x00010000
     .header_size: dd 92
     .header_crc32: dd 0 ;calculate later 
+    ; .header_crc32: db 0x83, 0x2B, 0x5A, 0x1C
     .reserved_1: dd 0
     .my_lba: dq 1
     .alternate_lba: dq image_size_lbas - 1
     .first_usable_lba: dq 1 + 1 + gpt_table_lbas
-    .last_usable_lba: dq image_size_lbas - 1 - gpt_table_lbas
-    .disk_guid: times guid_size db 0x00 ; set later 
+    .last_usable_lba: dq image_size_lbas - 2 - gpt_table_lbas
+    ; .disk_guid: times guid_size db 0x00 ; set later 
+    .disk_guid: db 0xB4,0x85,0x77,0xAC,0x30,0xFE,0x8A,0x4C,0xD0,0xBC,0x6E,0x2C,0xDE,0x50,0x61,0xDA 
     .partition_table_lba: dq 2
     .number_of_entries: dd 128
     .size_of_entry: dd 128
-    .partition_table_crc32: dd 0 ; calculate later 
-    .reserved_2: times 512-92 dd 0x00
+    .partition_table_crc32: dd 0
+    ; .partition_table_crc32: db 0x44,0x1D,0x11,0x87 
+    .reserved_2: times 512-92 db 0x00
 
 
 secondary_gpt:
@@ -481,45 +593,47 @@ secondary_gpt:
     .revision: dd 0x00010000
     .header_size: dd 92
     .header_crc32: dd 0
+    ; .header_crc32: db 0xCC, 0x4A, 0x1F, 0x45
     .reserved_1: dd 0
     .my_lba: dq image_size_lbas - 1
     .alternate_lba: dq 1
     .first_usable_lba: dq 1 + 1 + gpt_table_lbas
-    .last_usable_lba: dq image_size_lbas - 1 - gpt_table_lbas
-    .disk_guid: times guid_size db 0x00
+    .last_usable_lba: dq image_size_lbas - 2 - gpt_table_lbas
+    ; .disk_guid: times guid_size db 0x00
+    .disk_guid: db 0xB4,0x85,0x77,0xAC,0x30,0xFE,0x8A,0x4C,0xD0,0xBC,0x6E,0x2C,0xDE,0x50,0x61,0xDA
     .partition_table_lba: dq image_size_lbas - 1 - gpt_table_lbas
     .number_of_entries: dd 128
     .size_of_entry: dd 128
     .partition_table_crc32: dd 0
-    .reserved_2: times 512-92 dd 0x00
+    ; .partition_table_crc32: db 0x44,0x1D,0x11,0x87 
+    .reserved_2: times 512-92 db 0x00
 
 
 gpt_EFI_table:
     .partition_type_guid: times guid_size db 0x00
-    .unique_guid: times guid_size db 0x00
+    ; .unique_guid: times guid_size db 0x00
+    .unique_guid: db 0xEB,0x5E,0xAD,0x70,0x15,0xD5,0xBA,0x49,0xCD,0xA8,0x9C,0xDF,0x8E,0x53,0x5E,0x42
     .starting_lba: dq esp_lba
     .ending_lba: dq esp_lba + esp_size_lbas
     .attributes: dq 0
     .name: dw "E","F","I"," ","S","Y","S","T","E","M"
-    .name_end: times 36 - ($ - .name) db 0
+    .name_end: times 72 - ($ - .name) dw 0
 
 
 gpt_data_table:
     .partition_type_guid: times guid_size db 0x00
-    .unique_guid: times guid_size db 0x00
+    ; .unique_guid: times guid_size db 0x00
+    .unique_guid: db 0xD8,0xD6,0xEE,0x08,0xD4,0x79,0xE5,0x44,0xD5,0x53,0x91,0x13,0xA4,0xF2,0xEE,0x8F
     .starting_lba: dq data_lba
     .ending_lba: dq data_lba + data_size_lbas
     .attributes: dq 0
     .name: dw "B","A","S","I","C"," ","D","A","T","A"
-    .name_end: times 36 - ($ - .name) db 0
+    .name_end: times 72 - ($ - .name) dw 0
 
-gpt_empty_table:
-    .partition_type_guid: times guid_size db 0x00
-    .unique_guid: times guid_size db 0x00
-    .starting_lba: dq 0
-    .ending_lba: dq 0
-    .attributes: dq 0
-    .name: times 36 dw 0
+gptTable_size equ $ - gpt_data_table
+
+gpt_table times gptTable_size*128 db 0x00
+
 
 reserved_sectors equ 32
 Vbr:
