@@ -9,7 +9,6 @@ fixed_vars:
     GPT_TABLE_SIZE equ 16384
     ALIGNMENT equ 1048576
     FALLOC_FL_ZERO_RANGE equ 0x10
-    ATTR_DIRECTORY equ 0x10
     
     ;Sizes 
     lba_size equ 512
@@ -98,7 +97,8 @@ write_gpt:
     mov rax, gpt_table
     times 128*128 call write_to_file
 
-    mov rax, (image_size_lbas - 1 - gpt_table_lbas) * lba_size
+    mov rax, (image_size_lbas - 1 - gpt_table_lbas) * lba_size 
+
     call file_seek
 
     mov rax, gpt_table
@@ -134,105 +134,143 @@ write_table:
 
 
 write_esp:
+
+    fat32_fats_lba equ esp_lba + 32
+
+    mov rax, [Vbr.BPB_FATSz32]
+    mov rcx, [Vbr.BPB_NumFATs]
+    mul rcx
+    mov rcx, fat32_fats_lba
+    add rax, rcx 
+    mov r10, rax
+    
+    push r10
+
     mov rax, esp_lba*lba_size
     call file_seek
 
     mov rax, Vbr
-    check equ Vbr_size
-    times check call write_to_file
+    times 512 call write_to_file
 
     mov rax, FSInfo
-    check2 equ FSInfo_size
-    times check2 call write_to_file
+    times 512 call write_to_file
 
-    fat32_fats_lba equ esp_lba + Vbr.BPB_RsvdSecCnt
-    fat32_data_lba equ fat32_fats_lba + (2* ((align_lba - reserved_sectors)/2));(Vbr.BPB_NumFATs * Vbr.BPB_FATSz32)
 
     mov rax, 0
     .loop:
         mov r10, rax 
-        mov rcx, (align_lba - reserved_sectors)/2
-        imul rax, rcx 
+        mov rcx, [Vbr.BPB_FATSz32]
+        mul rcx 
         mov rbx, fat32_fats_lba
         add rax, rbx
         mov rbx, lba_size
-        imul rax, rbx
+        mul rbx
+
         call file_seek
 
         mov eax, 0xFFFFFFFB
         mov [cluster], eax ;0xFFFFFF00 | Vbr.BPB_Media
+        mov rax, cluster
         times 4 call write_to_file
 
         mov eax, 0xFFFFFFFF
         mov [cluster], eax
+        mov rax, cluster
         times 4 call write_to_file
 
         mov eax, 0xFFFFFFFF
         mov [cluster], eax
+        mov rax, cluster
         times 4 call write_to_file
 
         mov eax, 0xFFFFFFFF
         mov [cluster], eax
+        mov rax, cluster
         times 4 call write_to_file
 
-        mov r10, rax
+        mov rax, r10
         inc rax
         cmp rax, 2 ;Vbr.BPB_NumFATs
         jl .loop
 
-    mov rax, fat32_data_lba * lba_size
-    call file_seek
+    pop r10 
+    mov rax, r10 
+    ; push r10
+    mov rcx, lba_size
+    mul rcx
+    mov rbx, rax
+    push rax 
+    ;call print_number
+    pop rax
+    
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
+    inc rax 
 
-    ;need to set time and date for FAT32_Dir_Entry_Short
-    ;
-    ;
-    ;
+
+    call file_seek
 
     check3 equ FAT32_Dir_Entry_Short_size
-    mov rax, FAT32_Dir_Entry_Short
-    times check3 call write_to_file
-
-
-    mov rax, (fat32_data_lba + 1) * lba_size
-    call file_seek
-
-    ;
-    ;adjust dir name 
 
     mov rax, FAT32_Dir_Entry_Short
     times check3 call write_to_file
 
-    ;
-    ;adjust dir name 
+    ; ;seek to (fat32_data_lba+1) * lba_size
+    ; pop r10 
+    ; mov rax, r10 
+    ; push r10
+    ; inc rax
+    ; mov rcx, lba_size
+    ; mul rcx
+    ; call file_seek
 
-    mov rax, FAT32_Dir_Entry_Short
-    times check3 call write_to_file
+    ; ; mov [FAT32_Dir_Entry_Short.DIR_Name] ,".          "
+    ; mov rax, FAT32_Dir_Entry_Short
+    ; times check3 call write_to_file
 
-    ;
-    ;adjust dir name 
+    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,"..         "
+    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 0
+    ; mov rax, FAT32_Dir_Entry_Short
+    ; times check3 call write_to_file
 
-    mov rax, FAT32_Dir_Entry_Short
-    times check3 call write_to_file
+    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,"BOOT       "
+    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 4
+    ; mov rax, FAT32_Dir_Entry_Short
+    ; times check3 call write_to_file
 
 
-    mov rax, (fat32_data_lba + 2) * lba_size
-    call file_seek
+    ; pop r10 
+    ; mov rax, r10 
+    ; inc rax
+    ; inc rax
+    ; mov rcx, lba_size
+    ; mul rcx
+    ; call file_seek
 
-    ;
-    ;adjust dir name 
+    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,".          "
+    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 4
+    ; mov rax, FAT32_Dir_Entry_Short
+    ; times check3 call write_to_file
 
-    mov rax, FAT32_Dir_Entry_Short
-    times check3 call write_to_file
-
-    ;
-    ;adjust dir name 
-
-    mov rax, FAT32_Dir_Entry_Short
-    times check3 call write_to_file
+    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,"..         "
+    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 3
+    ; mov rax, FAT32_Dir_Entry_Short
+    ; times check3 call write_to_file
 
 
     ret 
         
+mov_word:
+
+
 
 new_guid:
     ;note this may not work as not seeded the random generation 
@@ -387,6 +425,7 @@ calculate_crc32: ; rax is len, rbx is pointer ;eax is return
     ret
 
 
+
 rand:
     mov rdi, rand_arr
     mov rsi, 16
@@ -405,6 +444,7 @@ mov_to_var:
 
 
 file_seek:
+
     mov rdi, [image]
     mov rsi, rax
     mov rdx, 0     
@@ -638,14 +678,14 @@ gpt_table times gptTable_size*128 db 0x00
 reserved_sectors equ 32
 Vbr:
     .BS_jmpBoot: db 0xEB, 0x00, 0x90
-    .BS_OEMName: db "THISDISK"
+    .BS_OEMName: db "GPCCOOLS"
     .BPB_BytesPerSec: dw lba_size
     .BPB_SecPerClus: db 1
     .BPB_RsvdSecCnt: dw reserved_sectors
     .BPB_NumFATs: db 2
     .BPB_RootEntCnt: dw 0
     .BPB_TotSec16: dw 0
-    .BPB_Media: db 0xFB
+    .BPB_Media: db 0xF8
     .BPB_FATSz16: dw 0
     .BPB_SecPerTrk: dw 0
     .BPB_NumHeads: dw 0
@@ -656,7 +696,7 @@ Vbr:
     .BPB_FSVer: dw 0
     .BPB_RootClus: dd 2
     .BPB_FSInfo: dw 1
-    .BPB_BkBootSec: dw 0
+    .BPB_BkBootSec: dw 6
     .BPB_Reserved: times 12 db 0
     .BS_DrvNum: db 0x80
     .BS_Reserved1: db 0
@@ -684,7 +724,7 @@ FAT32_Dir_Entry_Short:
         .DIR_Name: db "EFI        "
         .DIR_Attr: db ATTR_DIRECTORY
         .DIR_NTRes: db 0
-        .DIR_CrtTimeTenth: db 0
+        .DIR_CrtTimeTenth: db 0 
         .DIR_CrtTime: dw 0
         .DIR_CrtDate: dw 0
         .DIR_LstAccDate: dw 0
@@ -695,6 +735,16 @@ FAT32_Dir_Entry_Short:
         .DIR_FileSize: dd 0
 
 FAT32_Dir_Entry_Short_size equ $ - FAT32_Dir_Entry_Short
+
+FAT32_Dir_Attr:
+    ATTR_READ_ONLY equ 0x01
+    ATTR_HIDDEN    equ 0x02
+    ATTR_SYSTEM    equ 0x04
+    ATTR_VOLUME_ID equ 0x08
+    ATTR_DIRECTORY equ 0x10
+    ATTR_ARCHIVE   equ 0x20
+    ATTR_LONG_NAME equ ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID
+
 
 
 section .bss
