@@ -138,7 +138,8 @@ write_esp:
     fat32_fats_lba equ esp_lba + 32
 
     mov rax, [Vbr.BPB_FATSz32]
-    mov rcx, [Vbr.BPB_NumFATs]
+    mov rcx, 0 
+    mov cl, [Vbr.BPB_NumFATs]
     mul rcx
     mov rcx, fat32_fats_lba
     add rax, rcx 
@@ -195,26 +196,10 @@ write_esp:
 
     pop r10 
     mov rax, r10 
-    ; push r10
+    push r10
     mov rcx, lba_size
     mul rcx
     mov rbx, rax
-    push rax 
-    ;call print_number
-    pop rax
-    
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-    inc rax 
-
 
     call file_seek
 
@@ -223,52 +208,68 @@ write_esp:
     mov rax, FAT32_Dir_Entry_Short
     times check3 call write_to_file
 
-    ; ;seek to (fat32_data_lba+1) * lba_size
-    ; pop r10 
-    ; mov rax, r10 
-    ; push r10
-    ; inc rax
-    ; mov rcx, lba_size
-    ; mul rcx
-    ; call file_seek
+    ;seek to (fat32_data_lba+1) * lba_size
+    pop r10 
+    mov rax, r10 
+    push r10
+    inc rax
+    mov rcx, lba_size
+    mul rcx
+    call file_seek
 
-    ; ; mov [FAT32_Dir_Entry_Short.DIR_Name] ,".          "
-    ; mov rax, FAT32_Dir_Entry_Short
-    ; times check3 call write_to_file
+    
+    
+    mov r10, FAT32_Dir_Entry_Short.DIR_Name
+    mov r9, write_esp.in1
+    times 10 call mov_to_var
+    mov rax, FAT32_Dir_Entry_Short
+    times check3 call write_to_file
 
-    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,"..         "
-    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 0
-    ; mov rax, FAT32_Dir_Entry_Short
-    ; times check3 call write_to_file
+    
+    mov r10, FAT32_Dir_Entry_Short.DIR_Name
+    mov r9, write_esp.in2
+    times 10 call mov_to_var
+    mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 0
+    mov rax, FAT32_Dir_Entry_Short
+    times check3 call write_to_file
 
-    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,"BOOT       "
-    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 4
-    ; mov rax, FAT32_Dir_Entry_Short
-    ; times check3 call write_to_file
-
-
-    ; pop r10 
-    ; mov rax, r10 
-    ; inc rax
-    ; inc rax
-    ; mov rcx, lba_size
-    ; mul rcx
-    ; call file_seek
-
-    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,".          "
-    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 4
-    ; mov rax, FAT32_Dir_Entry_Short
-    ; times check3 call write_to_file
-
-    ; ;mov [FAT32_Dir_Entry_Short.DIR_Name] ,"..         "
-    ; mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 3
-    ; mov rax, FAT32_Dir_Entry_Short
-    ; times check3 call write_to_file
+    
+    mov r10, FAT32_Dir_Entry_Short.DIR_Name
+    mov r9, write_esp.in3
+    times 10 call mov_to_var
+    mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 4
+    mov rax, FAT32_Dir_Entry_Short
+    times check3 call write_to_file
 
 
+    pop r10 
+    mov rax, r10 
+    inc rax
+    inc rax
+    mov rcx, lba_size
+    mul rcx
+    call file_seek
+
+    mov r10, FAT32_Dir_Entry_Short.DIR_Name
+    mov r9, write_esp.in1
+    times 10 call mov_to_var
+    mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 4
+    mov rax, FAT32_Dir_Entry_Short
+    times check3 call write_to_file
+
+    mov r10, FAT32_Dir_Entry_Short.DIR_Name
+    mov r9, write_esp.in2
+    times 10 call mov_to_var
+    mov word [FAT32_Dir_Entry_Short.DIR_FstClusLO], 3
+    mov rax, FAT32_Dir_Entry_Short
+    times check3 call write_to_file
     ret 
+
+    .in1: db ".          "
+    .in2: db "..         "
+    .in3: db "BOOT       "
         
-mov_word:
+
 
 
 

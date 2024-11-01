@@ -20,3 +20,4 @@ Link: $(SRC_DIR)/Converter.asm Converter
 
 clean: 
 	rm -f ./bin/* 
+	rm -f test.hdd
