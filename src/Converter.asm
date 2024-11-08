@@ -362,10 +362,10 @@ add_path_to_esp:
         mov byte [r10], 0
 
         mov r9, 0
-        mov r9l, '.'
+        mov r9b, '.'
         call strchr
 
-        cmp type, TYPE_DIR
+        cmp rdx, TYPE_DIR
         jne .criteria2
         .criteria1:
 
@@ -408,13 +408,117 @@ add_path_to_esp:
         pop rax 
 
 
-        
+        cmp rdx, TYPE_DIR
+        je .if2
+        cmp r9, 0
+        je .if2
+        jmp .else2
+        .if2:
+
+            push rax
+            push rbx
+            push rcx
+            push rdx
+            mov rbx, rax ;start into rbx
+            mov rax, short_name
+            mov rcx, path_size - 1
+            call memcopy
+            pop rdx
+            pop rcx
+            pop rbx
+            pop rax
+            
+            jmp .end
+        .else2:
+
+            push rax
+            push rbx
+            push rcx
+            push rdx
+
+            mov rbx, rax ;start into rbx
+            mov rax, short_name
+            mov rdx, rbx
+            mov rcx, r9
+            sub rcx, rbx
+            call memcopy
+
+
+            pop rdx
+            pop rcx
+            pop rbx
+            pop rax
+
+            push rax
+            push rbx
+            push rcx
+            push rdx
+
+            mov rax, short_name
+            add rax, 8
+            inc r9
+            mov rbx, r9
+            mov rcx, 3
+            call strncpy
+
+
+            pop rdx
+            pop rcx
+            pop rbx
+            pop rax
+
+
+        .end3:
+
+
+
 
         
         jmp .loop1_start
     .loop1_end:
 
     ret 
+
+strncpy:; registers used: rax, rbx, rcx, rdx
+    ;rax is the string to be set 
+    ;rbx is pointer to value to copy
+    ;rcx is the length of the string 
+    ;only inside: rdx
+    mov rdx, 0 
+    .loop1_start:
+    cmp rdx, rcx
+    je .loop1_end
+
+    cmp byte [rbx], 0
+    je .loop1_end
+
+    mov [rax], rbx
+    inc rax 
+    inc rbx 
+    jmp .loop1_start
+    .loop1_end:
+
+    ret 
+
+
+
+memcopy:; registers used: rax, rbx, rcx, rdx
+    ;rax is the string to be set 
+    ;rbx is pointer to value to copy
+    ;rcx is the length of the string 
+    ;only inside: rdx
+    mov rdx, 0 
+    .loop1_start:
+    cmp rdx, rcx
+    je .loop1_end
+    mov [rax], rbx
+    inc rax 
+    inc rbx 
+    jmp .loop1_start
+    .loop1_end:
+
+    ret 
+
 
 zeroarray: ;registers used: rax, rbx, rcx 
     ;rax is the string 
@@ -423,8 +527,8 @@ zeroarray: ;registers used: rax, rbx, rcx
     mov rcx, 0
     .loop1_start:
         cmp rbx, rcx 
-        je .loop1_end:
-        mov [rax], 0
+        je .loop1_end
+        mov byte [rax], 0
         inc rcx
         
         jmp .loop1_start
@@ -442,7 +546,7 @@ memset: ;registers used: rax, rbx, rcx, rdx
     mov rdx, 0
     .loop1_start:
         cmp rbx, rdx 
-        je .loop1_end:
+        je .loop1_end
         mov [rax], cl
         inc rdx
         
@@ -459,12 +563,12 @@ strchr:
     push rax 
 
     .loop1_start:
-        cmp [rax], r9l
+        cmp [rax], r9b
         je .loop1_end2
         inc rax
 
         cmp byte [rax], 0
-        je, .loop1_end1
+        je .loop1_end1
         
         jmp .loop1_start
     .loop1_end1:
@@ -1031,5 +1135,5 @@ ktemp resd 1
 fat32_data_lba resq 1
 
 
-short_name times 12 resb
+short_name times 12 resb 1
 short_name_length equ $-short_name
