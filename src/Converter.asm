@@ -3,6 +3,36 @@
 section .text
 global _start          ;must be declared for linker (ld)
 
+Symbolic_Constants:
+
+    .open_syscall: ;int open(const char *pathname, int flags, /* mode_t mode */ );
+        O_RDONLY equ    0000o ;Read only 
+
+        O_WRONLY equ    0001o ;write only 
+
+        O_RDWR equ      0002o ;read and write
+
+        O_CREAT equ     0100o ;if file doesn't exist create it 
+
+        ;modes for O_CREAT
+        S_IRWXU         equ 00700o ; user (file owner) has read, write, and execute permission
+        S_IRUSR         equ 00400o ; user has read permission
+        S_IWUSR         equ 00200o ; user has write permission
+        S_IXUSR         equ 00100o ; user has execute permission
+        S_IRWXG         equ 00070o ; group has read, write, and execute permission
+        S_IRGRP         equ 00040o ; group has read permission
+        S_IWGRP         equ 00020o ; group has write permission
+        S_IXGRP         equ 00010o ; group has execute permission
+        S_IRWXO         equ 00007o ; others have read, write, and execute permission
+        S_IROTH         equ 00004o ; others have read permission
+        S_IWOTH         equ 00002o ; others have write permission
+        S_IXOTH         equ 00001o ; others have execute permission
+
+        S_ISUID         equ 00040o ;00 set-user-ID bit
+        S_ISGID         equ 00020o ;00 set-group-ID bit (see inode(7)).
+        S_ISVTX         equ 00010o ;00 sticky bit (see inode(7)).
+
+
 fixed_vars:
 
     ;constant enums 
@@ -34,7 +64,13 @@ _start:                ;tell linker entry point
     call write_mbr
     call write_gpt
     call write_esp
+    call open_efi_file
+
+    mov rax, path
+    mov rbx, path_size
+    call add_path_to_esp
     jmp done
+
 
 
 
@@ -145,6 +181,7 @@ write_esp:
     add rax, rcx 
     mov r10, rax
     
+    mov [fat32_data_lba], r10  
     push r10
 
     mov rax, esp_lba*lba_size
@@ -268,8 +305,208 @@ write_esp:
     .in1: db ".          "
     .in2: db "..         "
     .in3: db "BOOT       "
+
+open_efi_file:
+    mov rdi, Boot64_name
+    mov rsi, O_RDONLY     ;O_CREAT, man open
+    mov rdx, 0     ;umode_t
+    mov rax, 2
+    syscall
+    mov [Boot64], rax
+    ret
+
+
+add_path_to_esp:
+    ; rax is a pointer to the path  
+    ; rbx is the length of the path 
+    ; mov rcx, 0 
+    mov cx, '/'
+
+    cmp [rax], cl
+    jne Error
+
+    call String_to_Upper
+
+    mov rdx, TYPE_DIR ;rdx is type 
+    inc rax ;Skip slash '/'
+    mov r10, rax ; r10 is end 
+
+    
+    .loop1_start:
+        cmp rdx, TYPE_DIR
+        jne .loop1_end
+        .loop2_start:
+            mov cl, '/'
+            cmp [r10], cl
+            je .loop2_end
+            mov cl, 0
+            cmp [r10], cl 
+            je .loop2_end
+
+            inc r10 
+
+            jmp .loop2_start
+        .loop2_end:
+        mov cl, '/'
+        cmp [r10], cl
+        je .if
+        jmp .else
+        .if: 
+            mov rdx, TYPE_DIR
+            jmp .end
+        .else:
+            mov rdx, TYPE_FILE
+            jmp .end
+        .end:
+
+        mov byte [r10], 0
+
+        mov r9, 0
+        mov r9l, '.'
+        call strchr
+
+        cmp type, TYPE_DIR
+        jne .criteria2
+        .criteria1:
+
+        cmp rbx, 11
+        jg .true
+        .criteria2:
+
+        cmp rbx, 12
+        jg .true
+        .critera3:
+
+        cmp r9, 0
+        je .end2
+        sub r9, rax 
+        cmp r9, 8
+        jg .true
+        jmp .end2
+        .true:
+
+        jmp Error
+        .end2:
+
+        push rax 
+        push rbx 
+        push rcx 
+        mov rax, short_name
+        mov rbx, short_name_length
+        call zeroarray
+
+        push rdx
+        mov rax, short_name
+        mov rbx, 11
+        mov rcx, 0 
+        mov cl, ' '
+        call memset
+
+        pop rdx 
+        pop rcx 
+        pop rbx 
+        pop rax 
+
+
         
 
+        
+        jmp .loop1_start
+    .loop1_end:
+
+    ret 
+
+zeroarray: ;registers used: rax, rbx, rcx 
+    ;rax is the string 
+    ;rbx is the length 
+    ;only inside: rcx 
+    mov rcx, 0
+    .loop1_start:
+        cmp rbx, rcx 
+        je .loop1_end:
+        mov [rax], 0
+        inc rcx
+        
+        jmp .loop1_start
+    .loop1_end:
+
+    ret 
+
+
+
+memset: ;registers used: rax, rbx, rcx, rdx 
+    ;rax is a pointer to the start of the sting 
+    ;rbx is the length of the string to be set to rax 
+    ;rcx is the character to set the values to 
+    ;only inside: rdx 
+    mov rdx, 0
+    .loop1_start:
+        cmp rbx, rdx 
+        je .loop1_end:
+        mov [rax], cl
+        inc rdx
+        
+        jmp .loop1_start
+    .loop1_end:
+
+    ret 
+
+
+strchr:
+    ;rax is pointer to start of string is kept the same 
+    ;r9 is character to compare and will be position if true (r9l)
+    
+    push rax 
+
+    .loop1_start:
+        cmp [rax], r9l
+        je .loop1_end2
+        inc rax
+
+        cmp byte [rax], 0
+        je, .loop1_end1
+        
+        jmp .loop1_start
+    .loop1_end1:
+    mov rax, 0 
+    .loop1_end2:
+    mov r9, rax 
+    pop rax 
+    ret
+
+
+String_to_Upper:
+    ;rax is the pointer to the string for input and output
+    ;rbx is the length of the string for input and output
+    push rax
+    push rbx 
+    
+    mov r10, rbx 
+    mov r9, 0
+    .loop_start:
+        cmp byte [rax], 122
+        jg .else
+
+        cmp byte [rax], 97
+        jl  .else
+
+    .if:
+        mov rbx, [rax]
+        mov rcx, 32
+        Sub rbx, rcx
+        mov [rax], rbx
+
+    .else:
+        inc rax 
+        inc r9
+        cmp r9, r10
+
+        jl .loop_start
+
+
+    pop rbx
+    pop rax 
+    ret
 
 
 
@@ -455,8 +692,8 @@ file_seek:
 
 open_file:
     mov rdi, image_name
-    mov rsi, 0102o     ;O_CREAT, man open
-    mov rdx, 0666o     ;umode_t
+    mov rsi, O_CREAT | O_RDWR     ;0102o O_CREAT, man open
+    mov rdx, S_IRUSR | S_IWUSR | S_IROTH | S_IWOTH ; 0666o umode_t
     mov rax, 2
     syscall
     mov [image], rax
@@ -526,6 +763,30 @@ print_number: ;Code is Done ebx is input
 
     ret
 
+Error: ;Code is Done
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, .message
+    mov rdx, .message_length
+    syscall
+
+    mov eax, 60
+    xor rdi, rdi
+    syscall
+
+    .message: dd "Error", 10
+    .message_length: equ $ - .message
+
+
+print_string: ;r10 is pointer to string r9 is length 
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, r10
+    mov rdx, r9
+    syscall
+    ret 
 
 
 done: ;Code is Done
@@ -540,7 +801,7 @@ done: ;Code is Done
     xor rdi, rdi
     syscall
 
-    .message: ;Error Message
+    .message: 
         dd "Code is done", 10
 
 section .data
@@ -549,11 +810,21 @@ section .data
     image dq 0
     image_name db 'test.hdd', 0
 
+    ;Boot64.efi
+    Boot64 dq 0
+    Boot64_name db 'BOOTX64.EFI'
+
     ;Vars 
     cluster dd 0
+    path db "/`{}asdfASDF", 0
+    path_size equ $-path
 
     ;rand_arr
     rand_arr times 16 db 0x00
+
+File_type:
+    TYPE_DIR equ 0
+    TYPE_FILE equ 1
 
 
 ; Master boot record 
@@ -756,5 +1027,9 @@ ctemp resd 1
 ntemp resd 1
 ktemp resd 1
 
+;fat32datalba
+fat32_data_lba resq 1
 
 
+short_name times 12 resb
+short_name_length equ $-short_name
