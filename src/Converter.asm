@@ -330,6 +330,10 @@ add_path_to_esp:
     mov rdx, TYPE_DIR ;rdx is type 
     inc rax ;Skip slash '/'
     mov r10, rax ; r10 is end 
+    push rax 
+    mov rax, 2
+    mov [dir_cluster], rax
+    pop rax
 
     
     .loop1_start:
@@ -360,34 +364,48 @@ add_path_to_esp:
         .end:
 
         mov byte [r10], 0
-
+        
         mov r9, 0
         mov r9b, '.'
         call strchr
+
 
         cmp rdx, TYPE_DIR
         jne .criteria2
         .criteria1:
 
-        cmp rbx, 11
+        push rax
+        call strlen
+        cmp rax, 11
+        pop rax
         jg .true
         .criteria2:
 
-        cmp rbx, 12
+        push rax
+        call strlen
+        cmp rax, 12
+        pop rax
         jg .true
+
         .critera3:
 
         cmp r9, 0
         je .end2
-        sub r9, rax 
+
+        push r9
+        sub r9, rax ; r9 = r9 - rax
+
+
         cmp r9, 8
+        pop r9
         jg .true
         jmp .end2
         .true:
-
+            
         jmp Error
         .end2:
 
+        
         push rax 
         push rbx 
         push rcx 
@@ -402,6 +420,7 @@ add_path_to_esp:
         mov cl, ' '
         call memset
 
+        
         pop rdx 
         pop rcx 
         pop rbx 
@@ -414,23 +433,28 @@ add_path_to_esp:
         je .if2
         jmp .else2
         .if2:
-
+            
             push rax
             push rbx
             push rcx
             push rdx
             mov rbx, rax ;start into rbx
+            call strlen
+            mov rcx, rax
             mov rax, short_name
-            mov rcx, path_size - 1
             call memcopy
             pop rdx
             pop rcx
             pop rbx
             pop rax
-            
-            jmp .end
-        .else2:
 
+            ; push r10
+            ; mov r10, short_name
+            ; times 11 call print_string
+            ; pop r10
+            jmp .end3
+        .else2:
+            
             push rax
             push rbx
             push rcx
@@ -441,8 +465,8 @@ add_path_to_esp:
             mov rdx, rbx
             mov rcx, r9
             sub rcx, rbx
-            call memcopy
 
+            call memcopy
 
             pop rdx
             pop rcx
@@ -470,13 +494,44 @@ add_path_to_esp:
 
         .end3:
 
+        push rax
+        push rbx
+        mov rax, FAT32_Dir_Entry_Short
+        mov rbx, FAT32_Dir_Entry_Short_size
+        call zeroarray
+        pop rbx
+        pop rax
+
+        mov byte [found], 0
+
+        push rax
+        push rcx
+        mov rax, [fat32_data_lba]
+        mov cl, [dir_cluster]
+        add rax, rcx
+        sub rax, 2
+        mov rcx, lba_size
+        mul rcx ; rax = rax*rcx
+
+        Call file_seek
+        pop rcx
+        pop rax
+
+        inc r10
+        mov rax, r10
 
 
+        push rax
+        mov rax, short_name
+        call print_string
+        pop rax
 
-        
+
         jmp .loop1_start
+        
     .loop1_end:
-
+    
+    
     ret 
 
 strncpy:; registers used: rax, rbx, rcx, rdx
@@ -484,6 +539,10 @@ strncpy:; registers used: rax, rbx, rcx, rdx
     ;rbx is pointer to value to copy
     ;rcx is the length of the string 
     ;only inside: rdx
+    push rax
+    push rbx
+    push rcx
+    push rdx
     mov rdx, 0 
     .loop1_start:
     cmp rdx, rcx
@@ -491,15 +550,43 @@ strncpy:; registers used: rax, rbx, rcx, rdx
 
     cmp byte [rbx], 0
     je .loop1_end
-
-    mov [rax], rbx
+    push rcx
+    mov rcx, [rbx]
+    mov [rax], rcx
+    pop rcx
     inc rax 
     inc rbx 
     jmp .loop1_start
     .loop1_end:
 
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
     ret 
 
+
+strlen:; registers used: rax
+    ;rax is the string to be set and the number returned
+    push rbx
+    mov rbx, 0
+    .loop1_start:
+
+    cmp byte [rax], 0
+    je .loop1_end
+
+    inc rbx
+    inc rax 
+    ; push rax
+    ; mov rax, rbx
+    ; call print_number
+    ; pop rax
+    jmp .loop1_start
+    .loop1_end:
+    mov rax, rbx
+    pop rbx
+
+    ret 
 
 
 memcopy:; registers used: rax, rbx, rcx, rdx
@@ -507,15 +594,31 @@ memcopy:; registers used: rax, rbx, rcx, rdx
     ;rbx is pointer to value to copy
     ;rcx is the length of the string 
     ;only inside: rdx
-    mov rdx, 0 
+    push rax
+    push rbx
+    push rdx
+    mov rdx, 0
+
     .loop1_start:
+
     cmp rdx, rcx
     je .loop1_end
-    mov [rax], rbx
+
+    push rcx
+    mov rcx, 0
+    mov cl, [rbx]
+    mov [rax], cl
+    pop rcx
+
     inc rax 
     inc rbx 
+    inc rdx
     jmp .loop1_start
     .loop1_end:
+
+    pop rdx
+    pop rbx
+    pop rax
 
     ret 
 
@@ -523,7 +626,10 @@ memcopy:; registers used: rax, rbx, rcx, rdx
 zeroarray: ;registers used: rax, rbx, rcx 
     ;rax is the string 
     ;rbx is the length 
-    ;only inside: rcx 
+    ;only inside: rcx
+   push rax
+   push rbx
+   push rcx
     mov rcx, 0
     .loop1_start:
         cmp rbx, rcx 
@@ -534,6 +640,9 @@ zeroarray: ;registers used: rax, rbx, rcx
         jmp .loop1_start
     .loop1_end:
 
+    pop rcx
+    pop rbx
+    pop rax
     ret 
 
 
@@ -543,15 +652,27 @@ memset: ;registers used: rax, rbx, rcx, rdx
     ;rbx is the length of the string to be set to rax 
     ;rcx is the character to set the values to 
     ;only inside: rdx 
+    push rax
+    push rbx
+    push rcx
+    push rdx
+
     mov rdx, 0
     .loop1_start:
         cmp rbx, rdx 
         je .loop1_end
         mov [rax], cl
         inc rdx
+        inc rax
+        
         
         jmp .loop1_start
     .loop1_end:
+
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
 
     ret 
 
@@ -566,6 +687,7 @@ strchr:
         cmp [rax], r9b
         je .loop1_end2
         inc rax
+
 
         cmp byte [rax], 0
         je .loop1_end1
@@ -786,12 +908,19 @@ mov_to_var:
 
 
 file_seek:
-
+    push rax 
+    push rdx
+    push rdi 
+    push rsi
     mov rdi, [image]
     mov rsi, rax
     mov rdx, 0     
     mov rax, 8
     syscall
+    pop rsi
+    pop rdi
+    pop rdx
+    pop rax
     ret
 
 open_file:
@@ -835,37 +964,61 @@ write_zero_to_file: ;rax is pointer to start of stuff to write to file
     .zero: db 0x00
 
 
-print_number: ;Code is Done ebx is input
+print_number: 
+    ;rax is input number 
+    ;rbx is digits printed 
+    ;internal registers: rcx, rdx, rdi, rsi, r10
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rdi 
+    push rsi 
+    push r10
 
-    mov r10, rsp
-    mov r9, rbx
-    mov r8, 0
-
-    mov eax, ebx
-
-    push 0x0A
+    mov r10, 0 ;loop Count initiliased 
+    push 0x0A ; add new line to stack
 
     .loop:
-    mov edx, 0
-    mov ecx, 10
-    div ecx
-    add edx, 0x30
-    push rdx 
+    mov rdx, 0 ;zero rdx
+    mov rcx, 10 ;base ten 
 
-    inc r8
-    cmp r8, 12
+    div rcx ; rax = rax / rcx, rdx = remainder 
 
+    add rdx, 0x30 ;convert to ASCI
+
+    push rdx ; add to stack 
+
+    ; call print_test
+    inc r10
+    
+    cmp r10, rbx ;check if loop is done 
+     
     jl .loop
 
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, rsp
-    mov rdx, 8*13
+    mov rax, 8
+    mul rbx ; rax = rbx * rax
+    mov rdx, rax
+    mov rax, write_SYSCALL  
+    mov rdi, write_SYSCALL_console
+    mov rsi, rsp ;print stack
     syscall
 
-    mov rsp, r10
+    inc r10 
+    mov rax, 8
+    mul r10
+    add rsp, rax 
 
+
+    pop r10
+    pop rsi 
+    pop rdi 
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
     ret
+
 
 Error: ;Code is Done
 
@@ -883,14 +1036,50 @@ Error: ;Code is Done
     .message_length: equ $ - .message
 
 
-print_string: ;r10 is pointer to string r9 is length 
+print_string: ;rax is pointer to string
+
+    push rcx
+    push rax
+    push rdx
+    push rdi
+    push rsi
+
+    mov rsi, rax
+    call strlen
+    mov rdx, rax
+    mov rax, write_SYSCALL
+    mov rdi, write_SYSCALL_console
+    syscall
+
+    
+    pop rsi
+    pop rdi
+    pop rdx
+    pop rax
+    pop rcx
+    ret
+
+
+print_test: ;r10 is pointer to string r9 is length 
+
+    push rax
+    push rdi
+    push rsi 
+    push rdx
 
     mov rax, 1
     mov rdi, 1
-    mov rsi, r10
-    mov rdx, r9
+    mov rsi, .message
+    mov rdx, 13
     syscall
+
+    pop rdx
+    pop rsi 
+    pop rdi
+    pop rax
     ret 
+
+    .message: db "this is here" , 0x0A
 
 
 done: ;Code is Done
@@ -920,11 +1109,14 @@ section .data
 
     ;Vars 
     cluster dd 0
-    path db "/`{}asdfASDF", 0
+    path db "/EFI/BOOT/DSKIMG.INF", 0
     path_size equ $-path
 
     ;rand_arr
     rand_arr times 16 db 0x00
+
+    found db 0 
+    dir_cluster dd 0
 
 File_type:
     TYPE_DIR equ 0
@@ -1121,6 +1313,13 @@ FAT32_Dir_Attr:
     ATTR_ARCHIVE   equ 0x20
     ATTR_LONG_NAME equ ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID
 
+
+LINUX_SYSCALL:
+    write_SYSCALL equ 1
+
+
+
+write_SYSCALL_console equ 1
 
 
 section .bss
