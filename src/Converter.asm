@@ -3,35 +3,6 @@
 section .text
 global _start          ;must be declared for linker (ld)
 
-Symbolic_Constants:
-
-    .open_syscall: ;int open(const char *pathname, int flags, /* mode_t mode */ );
-        O_RDONLY equ    0000o ;Read only 
-
-        O_WRONLY equ    0001o ;write only 
-
-        O_RDWR equ      0002o ;read and write
-
-        O_CREAT equ     0100o ;if file doesn't exist create it 
-
-        ;modes for O_CREAT
-        S_IRWXU         equ 00700o ; user (file owner) has read, write, and execute permission
-        S_IRUSR         equ 00400o ; user has read permission
-        S_IWUSR         equ 00200o ; user has write permission
-        S_IXUSR         equ 00100o ; user has execute permission
-        S_IRWXG         equ 00070o ; group has read, write, and execute permission
-        S_IRGRP         equ 00040o ; group has read permission
-        S_IWGRP         equ 00020o ; group has write permission
-        S_IXGRP         equ 00010o ; group has execute permission
-        S_IRWXO         equ 00007o ; others have read, write, and execute permission
-        S_IROTH         equ 00004o ; others have read permission
-        S_IWOTH         equ 00002o ; others have write permission
-        S_IXOTH         equ 00001o ; others have execute permission
-
-        S_ISUID         equ 00040o ;00 set-user-ID bit
-        S_ISGID         equ 00020o ;00 set-group-ID bit (see inode(7)).
-        S_ISVTX         equ 00010o ;00 sticky bit (see inode(7)).
-
 
 fixed_vars:
 
@@ -360,6 +331,7 @@ add_path_to_esp:
             jmp .end
         .else:
             mov rdx, TYPE_FILE
+            ; call print_test
             jmp .end
         .end:
 
@@ -454,7 +426,7 @@ add_path_to_esp:
             ; pop r10
             jmp .end3
         .else2:
-            
+            ; call print_test
             push rax
             push rbx
             push rcx
@@ -492,6 +464,7 @@ add_path_to_esp:
             pop rax
 
 
+
         .end3:
 
         push rax
@@ -504,28 +477,111 @@ add_path_to_esp:
 
         mov byte [found], 0
 
+
+
         push rax
         push rcx
+        push rdx
         mov rax, [fat32_data_lba]
+        mov rcx, 0
         mov cl, [dir_cluster]
         add rax, rcx
+
         sub rax, 2
         mov rcx, lba_size
-        mul rcx ; rax = rax*rcx
-
+        mul rcx ; rdx:rax = rax*rcx, 
+        
         Call file_seek
+        pop rdx
         pop rcx
         pop rax
 
-        inc r10
-        mov rax, r10
 
+
+        .loop:
 
         push rax
+        push rbx
+        push rcx
+        mov rax, [image]
+        mov rbx, FAT32_Dir_Entry_Short
+        mov rcx, FAT32_Dir_Entry_Short_size 
+        call fread
+
         mov rax, short_name
-        call print_string
+        mov rbx, FAT32_Dir_Entry_Short.DIR_Name
+        mov rcx, 11
+        call memcmp
+
+
+        cmp rax, 0
+        jne .check
+
+        jmp .check2
+        .check:
+        mov byte [found], 1
+        
+        mov rax, 0
+        mov ax, [FAT32_Dir_Entry_Short.DIR_FstClusHI]
+        shl eax, 16
+
+        or eax, [FAT32_Dir_Entry_Short.DIR_FstClusLO]
+
+        mov [dir_cluster], eax
+
+
+
+
+        pop rcx
+        pop rbx
         pop rax
 
+
+        jmp .loop_end
+
+
+        .check2:
+
+
+        pop rcx
+        pop rbx
+        pop rax
+
+
+
+        
+        mov al, [FAT32_Dir_Entry_Short.DIR_Name]
+        cmp al, 0
+        jne .loop
+        .loop_end:
+
+
+        cmp byte [found], 0
+
+        je .check3
+
+
+        jmp .check4
+        .check3:
+
+        push rax 
+
+        mov rax, rdx
+        call add_file_to_esp
+
+        pop rax
+
+        ;
+        ;add_file_to_esp function
+        ;
+
+        .check4:
+
+
+
+
+        inc r10
+        mov rax, r10
 
         jmp .loop1_start
         
@@ -533,6 +589,69 @@ add_path_to_esp:
     
     
     ret 
+
+
+
+add_file_to_esp:
+
+    ret
+memcmp:
+    ;rax is the input of the first memory pointer , and the true or false output
+    ;rbx is the input of the second memory
+    ;rcx is the length of the comparison 
+    ;internal registers: rdx, r10
+    push rdx
+    push rbx
+    push rcx
+    push r10
+    mov rdx, 0 
+    .loop:
+    ; call print_test
+
+    mov r10b, [rbx]
+    cmp [rax], r10b
+    jne .fail
+    inc rax
+    inc rbx
+    inc rdx
+
+    cmp rdx, rcx
+    jl .loop
+
+    mov rax, 1
+    jmp .end
+
+    .fail:
+    mov rax, 0
+
+    .end:
+
+    pop r10
+    pop rcx
+    pop rbx
+    pop rdx
+    ret
+
+
+
+fread:
+    ;rax is the file pointer 
+    ;rbx is the location the output read from file 
+    ;rcx is the count of bytes taken from the file 
+    push rdx
+    push rdi 
+    push rsi
+    mov rdi, rax
+    mov rsi, rbx
+    mov rdx, rcx     
+    mov rax, LINUX_SYSCALL.read_SYSCALL
+    syscall
+    pop rsi
+    pop rdi
+    pop rdx
+    ret
+
+
 
 strncpy:; registers used: rax, rbx, rcx, rdx
     ;rax is the string to be set 
@@ -999,7 +1118,7 @@ print_number:
     mov rax, 8
     mul rbx ; rax = rbx * rax
     mov rdx, rax
-    mov rax, write_SYSCALL  
+    mov rax, LINUX_SYSCALL.write_SYSCALL  
     mov rdi, write_SYSCALL_console
     mov rsi, rsp ;print stack
     syscall
@@ -1038,6 +1157,7 @@ Error: ;Code is Done
 
 print_string: ;rax is pointer to string
 
+    push rax
     push rcx
     push rax
     push rdx
@@ -1047,7 +1167,7 @@ print_string: ;rax is pointer to string
     mov rsi, rax
     call strlen
     mov rdx, rax
-    mov rax, write_SYSCALL
+    mov rax, LINUX_SYSCALL.write_SYSCALL
     mov rdi, write_SYSCALL_console
     syscall
 
@@ -1057,6 +1177,7 @@ print_string: ;rax is pointer to string
     pop rdx
     pop rax
     pop rcx
+    pop rax
     ret
 
 
@@ -1070,7 +1191,7 @@ print_test: ;r10 is pointer to string r9 is length
     mov rax, 1
     mov rdi, 1
     mov rsi, .message
-    mov rdx, 13
+    mov rdx, 5
     syscall
 
     pop rdx
@@ -1079,7 +1200,7 @@ print_test: ;r10 is pointer to string r9 is length
     pop rax
     ret 
 
-    .message: db "this is here" , 0x0A
+    .message: db "Test" , 0x0A
 
 
 done: ;Code is Done
@@ -1315,11 +1436,38 @@ FAT32_Dir_Attr:
 
 
 LINUX_SYSCALL:
-    write_SYSCALL equ 1
+    .read_SYSCALL: equ 0 
+    .write_SYSCALL: equ 1
+        write_SYSCALL_console equ 1
+    .open_syscall: equ 2;int open(const char *pathname, int flags, /* mode_t mode */ );
+        O_RDONLY equ    0000o ;Read only 
+
+        O_WRONLY equ    0001o ;write only 
+
+        O_RDWR equ      0002o ;read and write
+
+        O_CREAT equ     0100o ;if file doesn't exist create it 
+
+        ;modes for O_CREAT
+        S_IRWXU         equ 00700o ; user (file owner) has read, write, and execute permission
+        S_IRUSR         equ 00400o ; user has read permission
+        S_IWUSR         equ 00200o ; user has write permission
+        S_IXUSR         equ 00100o ; user has execute permission
+        S_IRWXG         equ 00070o ; group has read, write, and execute permission
+        S_IRGRP         equ 00040o ; group has read permission
+        S_IWGRP         equ 00020o ; group has write permission
+        S_IXGRP         equ 00010o ; group has execute permission
+        S_IRWXO         equ 00007o ; others have read, write, and execute permission
+        S_IROTH         equ 00004o ; others have read permission
+        S_IWOTH         equ 00002o ; others have write permission
+        S_IXOTH         equ 00001o ; others have execute permission
+
+        S_ISUID         equ 00040o ;00 set-user-ID bit
+        S_ISGID         equ 00020o ;00 set-group-ID bit (see inode(7)).
+        S_ISVTX         equ 00010o ;00 sticky bit (see inode(7)).
 
 
 
-write_SYSCALL_console equ 1
 
 
 section .bss
