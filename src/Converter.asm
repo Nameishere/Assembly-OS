@@ -288,7 +288,6 @@ open_efi_file:
     call check_Error
 
     .end:
-    call done
     mov [Boot64], rax
     ret
 
@@ -616,9 +615,10 @@ add_file_to_esp:
     mul rcx
     call file_seek
 
+
     mov rax, [image]
     mov rbx, Vbr
-    mov rbx, Vbr_size
+    mov rcx, Vbr_size
     call fread
 
     mov rax, FSInfo
@@ -632,34 +632,209 @@ add_file_to_esp:
     mul rcx
     call file_seek
 
+    
     mov rax, [image]
     mov rbx, FSInfo
-    mov rbx, FSInfo_size
+    mov rcx, FSInfo_size
     call fread
 
-
-    mov rbx, 0 ; file_size_bytes
-    mov rcx, 0 ; file_size_lbas
-    push rbx
-    push rcx
+    mov rax, 0
+    mov [file_size_bytes], rax ; file_size_bytes
+    mov [file_size_lbas], rax ; file_size_lbas
 
     pop rax 
-
-
     cmp rax, TYPE_FILE
+    push rax
+    jne .endif1
 
     mov rax, [Boot64]
     mov rbx, 0
     mov rcx, SEEK_END
     call fseek
+    mov [file_size_bytes], rax
 
+    call bytes_to_lbas
+
+    mov [file_size_lbas], rax
+
+    mov rax, [Boot64]
+    mov rbx, 0
+    mov rcx, SEEK_SET
+    call fseek
 
     .endif1:
 
+    mov rax, 0
+    mov eax, [FSInfo.FSI_Nxt_Free] 
+    mov [next_free_cluster], eax
 
-    pop rcx
-    pop rbx
+    mov eax, [next_free_cluster] 
+    mov [starting_cluster], eax
 
+
+    mov r10, 0
+    .startloop1:
+        cmp r10b, [Vbr.BPB_NumFATs]
+        jge .endloop1
+
+
+        mov rcx, 0
+        mov ecx, [Vbr.BPB_FATSz32]
+        mov rax, 0
+        mov al, r10b
+        mul rcx
+        add rax, fat32_fats_lba
+        mov rcx, lba_size
+        mul rcx 
+        mov rbx, rax
+        mov rax, [image]
+        mov rcx, SEEK_SET
+        call fseek
+
+
+        mov rcx, 0
+        mov ecx, [next_free_cluster]
+        mov rax, 4
+        mul rcx
+        mov rbx, rax
+        mov rax, [image]
+        mov rcx, SEEK_CUR
+        call fseek
+
+        ; mov rbx, 25
+        ; call print_number
+        ; call print_test
+
+        mov eax, [FSInfo.FSI_Nxt_Free]
+        mov [cluster], eax
+        mov [next_free_cluster], eax
+
+        pop rax 
+        push rax
+        cmp rax, TYPE_FILE
+        jne .endloop2
+
+        mov r9, 0 
+        .startloop2:
+            mov rax, [file_size_lbas]
+            dec rax 
+            cmp r9, rax
+            jge .endloop2
+            mov rax, 0
+            mov eax, [cluster]
+            inc eax
+            mov [cluster], eax
+            mov rax, 0
+            mov eax, [next_free_cluster]
+            inc eax
+            mov [next_free_cluster], eax
+
+            mov rax, [image]
+            mov rbx, cluster
+            mov rcx, 4
+            
+            call fwrite
+            inc r9
+
+            jmp .startloop2
+        .endloop2:
+
+        mov eax, 0xFFFFFFFF
+        mov  [cluster], eax
+
+        mov rax, 0
+        mov eax, [next_free_cluster]
+        inc eax
+        mov [next_free_cluster], eax
+
+        mov rax, [image]
+        mov rbx, cluster
+        mov rcx, 4
+        call fwrite
+        
+        inc r10b
+        jmp .startloop1
+    .endloop1:
+
+    mov eax, [next_free_cluster]
+    mov [FSInfo.FSI_Nxt_Free], eax
+
+    mov rax, esp_lba
+    inc rax
+    mov rcx, lba_size
+    mul rcx
+
+    mov rbx, rax
+    mov rax, [image]
+    mov rcx, SEEK_SET
+    call fseek
+
+    mov rbx, FSInfo
+    mov rax, [image]
+    mov rcx, FSInfo_size
+    call fwrite
+
+    mov rax, 0 
+    mov rcx, 0
+    mov eax, [dir_cluster]
+    mov ecx, [fat32_data_lba]
+    add eax, ecx
+    dec rax
+    dec rax
+    mov rcx, lba_size
+    mul rcx
+
+    mov rbx, rax
+    mov rax, [image]
+    mov rcx, SEEK_SET
+    call fseek
+
+
+    mov rax, FAT32_Dir_Entry_Short
+    mov rbx, FAT32_Dir_Entry_Short_size
+    call zeroarray
+
+    
+
+    .startloop3:
+    mov rax, [image]
+    mov rbx, FAT32_Dir_Entry_Short
+    mov rcx, FAT32_Dir_Entry_Short_size
+    call fread
+
+    mov al, [FAT32_Dir_Entry_Short.DIR_Name]
+    cmp al, 0 
+    je .endloop3
+
+    mov rbx, -32
+    mov rax, [image]
+    mov rcx, SEEK_CUR
+    call fseek
+
+    ; call print_test
+
+    mov rax, FAT32_Dir_Entry_Short.DIR_Name
+    mov rbx, short_name
+    mov rcx, 11
+    call memcopy
+
+    
+    pop rax
+    push rax
+    cmp rax, TYPE_DIR
+    jne .endif2
+    mov byte [FAT32_Dir_Entry_Short.DIR_Attr], ATTR_DIRECTORY
+    .endif2:
+
+
+    call get_fat_dir_entry_time_date
+
+
+    jmp .startloop3
+    .endloop3:
+
+    
+    pop rax
     pop rdx
     pop rcx
     pop rbx
@@ -667,6 +842,72 @@ add_file_to_esp:
 
 
     ret
+
+get_fat_dir_entry_time_date:
+    mov rax, 0
+    call timef
+
+    mov rbx, 20
+    call print_number
+    ret
+
+
+localtime:
+    
+
+timef:
+    ;rax is a pointer to the output if not null 
+
+    push rdx
+    push rsi
+    push rdi
+    mov rdx, 0       ;message length
+    mov rsi, 0        ;message to write
+    mov rdi, rax        ;file descriptor
+    mov rax, LINUX_SYSCALL.time  
+    syscall            ;call kernel   
+
+    call check_Error
+    pop rdi
+    pop rsi
+    pop rdx
+    
+
+    ret
+
+fwrite:
+    ;rax is a pointer to the file 
+    ;rbx is a pointer to the input 
+    ;rcx is the size to input 
+
+    push rax
+    push rdx
+    push rsi
+    push rdi
+    mov rdx, rcx       ;message length
+    mov rsi, rbx        ;message to write
+    mov rdi, rax        ;file descriptor
+    mov rax, LINUX_SYSCALL.write  
+    syscall            ;call kernel    
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rax
+
+    ret
+
+bytes_to_lbas:
+    push rbx
+    mov rbx, lba_size
+    dec rbx
+    add rax, rbx
+    mov rcx, lba_size
+    div rcx
+    pop rbx
+
+    ret
+
+
 
 
 
@@ -721,6 +962,9 @@ fread:
     mov rdx, rcx     
     mov rax, LINUX_SYSCALL.read_SYSCALL
     syscall
+
+
+    call check_Error
     pop rsi
     pop rdi
     pop rdx
@@ -798,6 +1042,7 @@ memcopy:; registers used: rax, rbx, rcx, rdx
     cmp rdx, rcx
     je .loop1_end
 
+    ; call print_test
     push rcx
     mov rcx, 0
     mov cl, [rbx]
@@ -1134,7 +1379,7 @@ fseek:
     mov rax, LINUX_SYSCALL.lseek
     syscall
 
-
+    call check_Error
 
     pop rsi
     pop rdi
@@ -1221,7 +1466,7 @@ print_number:
     mov rax, 8
     mul rbx ; rax = rbx * rax
     mov rdx, rax
-    mov rax, LINUX_SYSCALL.write_SYSCALL  
+    mov rax, LINUX_SYSCALL.write  
     mov rdi, write_console
     mov rsi, rsp ;print stack
     syscall
@@ -1240,6 +1485,7 @@ print_number:
     pop rbx
     pop rax
     ret
+
 
 
 check_Error: ;Code is Done
@@ -1290,7 +1536,7 @@ print_string: ;rax is pointer to string
     mov rsi, rax
     call strlen
     mov rdx, rax
-    mov rax, LINUX_SYSCALL.write_SYSCALL
+    mov rax, LINUX_SYSCALL.write
     mov rdi, write_console
     syscall
 
@@ -1304,7 +1550,7 @@ print_string: ;rax is pointer to string
     ret
 
 
-print_test: ;r10 is pointer to string r9 is length 
+print_test: 
 
     push rax
     push rdi
@@ -1340,7 +1586,9 @@ done: ;Code is Done
 
     .message: 
         dd "Code is done", 10
-
+;========================================================
+;Data
+;========================================================
 section .data
 
     ;File image
@@ -1361,6 +1609,12 @@ section .data
 
     found db 0 
     dir_cluster dd 0
+
+    file_size_bytes dq 0 
+    next_free_cluster dd 0
+    starting_cluster dd 0
+    file_size_lbas dq 0
+    
 
 File_type:
     TYPE_DIR equ 0
@@ -1548,6 +1802,17 @@ FAT32_Dir_Entry_Short:
 
 FAT32_Dir_Entry_Short_size equ $ - FAT32_Dir_Entry_Short
 
+tm:
+    .tm_sec: dw 0
+    .tm_min: dw 0
+    .tm_hour: dw 0
+    .tm_mday: dw 0
+    .tm_mon: dw 0
+    .tm_year: dw 0
+    .tm_wday: dw 0
+    .tm_yday: dw 0
+    .tm_isdst: dw 0
+
 FAT32_Dir_Attr:
     ATTR_READ_ONLY equ 0x01
     ATTR_HIDDEN    equ 0x02
@@ -1560,7 +1825,7 @@ FAT32_Dir_Attr:
 
 LINUX_SYSCALL:
     .read_SYSCALL:  equ 0 
-    .write_SYSCALL: equ 1
+    .write: equ 1
         write_console   equ 1
     .open:  equ 2;int open(const char *pathname, int flags, /* mode_t mode */ );
         O_RDONLY        equ 0000o ;Read only 
@@ -1596,6 +1861,7 @@ LINUX_SYSCALL:
         SEEK_END        equ 2
     .mmap_SYSCALL:  equ 9
     .mporotect:     equ 10
+    .time: equ 201
 
 
 
