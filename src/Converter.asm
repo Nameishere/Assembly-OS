@@ -6,6 +6,10 @@ global _start          ;must be declared for linker (ld)
 
 fixed_vars:
 
+    ;Time 
+    nz_time equ 12
+    day_light_savings equ 1
+
     ;constant enums 
     GPT_TABLE_SIZE equ 16384
     ALIGNMENT equ 1048576
@@ -819,17 +823,19 @@ add_file_to_esp:
     call memcopy
 
     
+    
     pop rax
     push rax
     cmp rax, TYPE_DIR
     jne .endif2
     mov byte [FAT32_Dir_Entry_Short.DIR_Attr], ATTR_DIRECTORY
     .endif2:
-
+    
+    call print_test
 
     call get_fat_dir_entry_time_date
 
-
+    call print_test
     jmp .startloop3
     .endloop3:
 
@@ -847,12 +853,165 @@ get_fat_dir_entry_time_date:
     mov rax, 0
     call timef
 
-    mov rbx, 20
-    call print_number
+    call localtime
+
+    call done
     ret
 
 
 localtime:
+    ;divide to get the number of minutes since epoch in rax and currenty seconds in rdx 
+    push rcx
+    push rax 
+    push rdx 
+    push rbx
+    push r10
+
+    mov rdx, 0
+    mov rcx, 60 
+    div rcx
+
+    ; rdx is the current seconds time  
+    push rax
+    mov rax, rdx
+    mov rbx, 20
+    call print_number
+    call print_test
+    pop rax
+
+    ;divide to get the number of hours since epoch in rax and current minutes in rdx 
+    mov rdx, 0
+    mov rcx, 60 
+    div rcx
+
+    ; rdx is the current minutes 
+    push rax
+    mov rax, rdx
+    mov rbx, 20
+    call print_number
+    call print_test
+    pop rax
+
+    ; convert to time zone and daylight savings
+    add rax, nz_time
+    add rax, day_light_savings
+
+    ;divide by 24 to get the number of days since epoch in rax and current hours in rdx
+    mov rdx, 0
+    mov rcx, 24 
+    div rcx
+
+    ; rdx is the current hours 
+    push rax
+    mov rax, rdx
+    mov rbx, 20
+    call print_number
+    call print_test
+    pop rax
+
+    ;At this point rax is the number of days 
+    ;need: number of years, day of year, months, day of month and day of week
+
+    ;Calculate the day of the week 
+    push rax 
+    mov rdx, 0
+    mov rcx, 7
+    div rcx
+    mov rax, rdx 
+    add rax, 3
+    mov rbx, 20
+    call print_number
+    call print_test
+    pop rax
+
+
+    ; push rax 
+    ; mov rbx, 20
+    ; call print_number
+    ; call print_test
+    ; pop rax 
+
+    ;calculate year 
+    add rax, 365*2 ;account for leap year timings 
+    mov rdx, 0
+    mov rcx, 4
+    mul rcx
+    mov rdx, 0
+    mov rcx, 1461 ;365*4 + 1
+    div rcx
+    sub rax, 2
+
+    ; push rax 
+    ; mov rax, rdx
+    ; mov rbx, 20
+    ; call print_number
+    ; call print_test
+    ; pop rax 
+
+    ;Year 
+    push rax 
+    push rdx 
+    mov rcx, 1970
+    add rax, rcx
+    mov rbx, 20
+    call print_number
+    call print_test
+    pop rdx
+    pop rax 
+
+
+    ;caluculate day of year 
+    push rax 
+    mov rax, rdx
+    mov rdx, 0
+    mov rcx, 4
+    div rcx
+    mov rdx, rax
+    pop rax
+
+    push rax 
+    mov rax, rdx
+    mov rbx, 20
+    call print_number
+    call print_test
+    pop rax 
+
+    ; mov rdx, 121
+    ;at this point rdx is the day of the year and rax is the number of year since epoch 
+    ;need day of month and month
+    mov rcx, 0 ; month
+    mov r10, .month_lengths
+    .startloop1:
+    cmp dx, [r10]
+    jl .endloop1
+
+    sub dx, [r10]
+    inc r10
+    inc r10
+    inc rcx
+    jmp .startloop1 
+    .endloop1:
+
+
+    mov rax, rcx 
+    mov rbx, 20
+    call print_number
+    call print_test
+
+    mov rax, rdx 
+    mov rbx, 20
+    call print_number
+    call print_test
+
+    pop r10
+    pop rbx
+    pop rdx
+    pop rax
+    pop rcx
+
+    ret 
+    .month_lengths: dw 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+
     
 
 timef:
