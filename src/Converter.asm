@@ -912,27 +912,23 @@ localtime:
     ;At this point rax is the number of days 
     ;need: number of years, day of year, months, day of month and day of week
 
+
     ;Calculate the day of the week 
     push rax 
+    add rax, 3 ;account for not starting on monday 
     mov rdx, 0
     mov rcx, 7
     div rcx
     mov rax, rdx 
-    add rax, 3
     mov rbx, 20
     call print_number
     call print_test
     pop rax
 
 
-    ; push rax 
-    ; mov rbx, 20
-    ; call print_number
-    ; call print_test
-    ; pop rax 
-
     ;calculate year 
-    add rax, 365*2 ;account for leap year timings 
+    add rax, 365*2 + 1  ;account for leap year timings 
+    
     mov rdx, 0
     mov rcx, 4
     mul rcx
@@ -941,12 +937,6 @@ localtime:
     div rcx
     sub rax, 2
 
-    ; push rax 
-    ; mov rax, rdx
-    ; mov rbx, 20
-    ; call print_number
-    ; call print_test
-    ; pop rax 
 
     ;Year 
     push rax 
@@ -959,33 +949,56 @@ localtime:
     pop rdx
     pop rax 
 
-
     ;caluculate day of year 
     push rax 
     mov rax, rdx
+    
     mov rdx, 0
     mov rcx, 4
     div rcx
-    mov rdx, rax
-    pop rax
 
-    push rax 
-    mov rax, rdx
     mov rbx, 20
     call print_number
     call print_test
-    pop rax 
 
-    ; mov rdx, 121
-    ;at this point rdx is the day of the year and rax is the number of year since epoch 
+    mov rdx, rax
+    pop rax
+
+
+
+    push rdx
+    mov rdx,0 
+    mov rcx, 4
+    div rcx
+    mov rax, rdx
+    sub rax, 2
+    pop rdx
+    
+    ;at this point rdx is the day of the year and rax is remainder of year /4 (0 when leap)
     ;need day of month and month
     mov rcx, 0 ; month
     mov r10, .month_lengths
     .startloop1:
+    cmp rax, 0
+    jne .ifend1 
+    
+    cmp rcx, 1
+    je .ifend2
+    
+    .ifend1:
     cmp dx, [r10]
     jl .endloop1
-
     sub dx, [r10]
+    jmp .else1
+    .ifend2:
+    
+    cmp dx, 29
+    jl .endloop1
+    sub dx, 29
+    .else1:
+
+
+    
     inc r10
     inc r10
     inc rcx
@@ -1010,7 +1023,7 @@ localtime:
     pop rcx
 
     ret 
-    .month_lengths: dw 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+    .month_lengths: dw 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 
     
 
