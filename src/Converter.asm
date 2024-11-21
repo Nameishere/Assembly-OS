@@ -815,7 +815,6 @@ add_file_to_esp:
     mov rcx, SEEK_CUR
     call fseek
 
-    ; call print_test
 
     mov rax, FAT32_Dir_Entry_Short.DIR_Name
     mov rbx, short_name
@@ -830,11 +829,104 @@ add_file_to_esp:
     jne .endif2
     mov byte [FAT32_Dir_Entry_Short.DIR_Attr], ATTR_DIRECTORY
     .endif2:
-    
-    call print_test
 
+    
     call get_fat_dir_entry_time_date
 
+    mov [FAT32_Dir_Entry_Short.DIR_CrtTime], bx
+    mov [FAT32_Dir_Entry_Short.DIR_CrtDate], ax
+    mov [FAT32_Dir_Entry_Short.DIR_WrtTime], bx
+    mov [FAT32_Dir_Entry_Short.DIR_WrtDate], ax
+
+    mov rax, 0
+    mov eax, [starting_cluster]
+    shr eax, 16
+    and eax, 0xFFFF
+    mov [FAT32_Dir_Entry_Short.DIR_FstClusHI], ax 
+
+    mov rax, 0
+    mov eax, [starting_cluster]
+    and eax, 0xFFFF
+    mov [FAT32_Dir_Entry_Short.DIR_FstClusLO], ax 
+
+    
+    pop rax
+    push rax
+
+    cmp rax, TYPE_FILE
+    jne .endif3
+
+    mov rax, [file_size_lbas]
+    mov [FAT32_Dir_Entry_Short.DIR_FileSize], rax
+    
+    .endif3:
+
+    mov rax, [image]
+    mov rbx, FAT32_Dir_Entry_Short
+    mov rcx, FAT32_Dir_Entry_Short_size
+    call fwrite
+
+    mov rax, [fat32_data_lba]
+    mov rbx, 0
+    mov ebx, [starting_cluster]
+    add rax, rbx 
+    sub rax, 2
+    mov rcx, lba_size
+    mul rcx
+    mov rbx, rax 
+    mov rax, [image]
+    mov rcx, SEEK_SET
+    call fseek 
+
+    pop rax 
+    push rax
+
+    cmp rax, TYPE_DIR
+    jne .elseif4
+
+    mov rax, .String1
+    mov rbx, FAT32_Dir_Entry_Short.DIR_Name
+    mov rcx, 11
+    call memcopy
+
+    mov rax, [image]
+    mov rbx, FAT32_Dir_Entry_Short
+    mov rcx, FAT32_Dir_Entry_Short_size
+    call fwrite
+
+    mov rax, .String2
+    mov rbx, FAT32_Dir_Entry_Short.DIR_Name
+    mov rcx, 11
+    call memcopy
+
+    mov rax, 0
+    mov eax, [dir_cluster]
+    shr rax, 16 
+    and rax, 0xFFFF
+    mov [FAT32_Dir_Entry_Short.DIR_FstClusHI], ax
+    mov rax, 0
+    mov eax, [dir_cluster]
+    and rax, 0xFFFF
+    mov [FAT32_Dir_Entry_Short.DIR_FstClusLO], ax
+    
+    mov rax, [image]
+    mov rbx, FAT32_Dir_Entry_Short
+    mov rcx, FAT32_Dir_Entry_Short_size
+    call fwrite
+
+    jmp .endif4
+    .elseif4:
+
+
+
+
+
+    .endif4:
+
+
+
+
+    ; call done
     call print_test
     jmp .startloop3
     .endloop3:
@@ -845,17 +937,53 @@ add_file_to_esp:
     pop rcx
     pop rbx
     pop rcx
-
-
     ret
 
+    .String1: db ".          "
+    .String2: db "..         "
+
 get_fat_dir_entry_time_date:
+    ; rax output as date 
+    ; rbx output as time  
+    push rcx
+    push rdx
+
     mov rax, 0
     call timef
-
     call localtime
+    ; call print_localtime
+    mov     rax,    0
+    mov     eax,    [tm.year] 
+    sub     rax,    80
+    shl     rax,    9
+    mov     rbx,    0
+    mov     bl,     [tm.mon]
+    add     rbx,    1 
+    shl     rbx,    5
+    or      rax,    rbx 
+    mov     rbx,    0
+    mov     bl,     [tm.mday]
+    or      ax,     bx
+    ;ax is now date 
 
-    call done
+    push    rax 
+    mov     rax,    0
+    mov     al,     [tm.hour]
+    shl     rax,    11
+    mov     rbx,    0
+    mov     bl,     [tm.min]
+    shl     rbx,    5
+    or      rbx,    rax
+    mov     rax,    0
+    mov     al,     [tm.sec]
+    mov     rcx,    2
+    div     rcx
+    or      rbx,    rax
+    pop rax 
+    ;bx is now time 
+
+    pop rdx
+    pop rcx
     ret
 
 
@@ -872,12 +1000,7 @@ localtime:
     div rcx
 
     ; rdx is the current seconds time  
-    push rax
-    mov rax, rdx
-    mov rbx, 20
-    call print_number
-    call print_test
-    pop rax
+    mov [tm.sec], dl
 
     ;divide to get the number of hours since epoch in rax and current minutes in rdx 
     mov rdx, 0
@@ -885,12 +1008,7 @@ localtime:
     div rcx
 
     ; rdx is the current minutes 
-    push rax
-    mov rax, rdx
-    mov rbx, 20
-    call print_number
-    call print_test
-    pop rax
+    mov [tm.min], dl
 
     ; convert to time zone and daylight savings
     add rax, nz_time
@@ -902,12 +1020,7 @@ localtime:
     div rcx
 
     ; rdx is the current hours 
-    push rax
-    mov rax, rdx
-    mov rbx, 20
-    call print_number
-    call print_test
-    pop rax
+    mov [tm.hour], dl
 
     ;At this point rax is the number of days 
     ;need: number of years, day of year, months, day of month and day of week
@@ -919,10 +1032,7 @@ localtime:
     mov rdx, 0
     mov rcx, 7
     div rcx
-    mov rax, rdx 
-    mov rbx, 20
-    call print_number
-    call print_test
+    mov [tm.wday], dl
     pop rax
 
 
@@ -941,11 +1051,9 @@ localtime:
     ;Year 
     push rax 
     push rdx 
-    mov rcx, 1970
+    mov rcx, 70
     add rax, rcx
-    mov rbx, 20
-    call print_number
-    call print_test
+    mov [tm.year], eax
     pop rdx
     pop rax 
 
@@ -957,9 +1065,7 @@ localtime:
     mov rcx, 4
     div rcx
 
-    mov rbx, 20
-    call print_number
-    call print_test
+    mov [tm.yday], ax
 
     mov rdx, rax
     pop rax
@@ -1006,15 +1112,11 @@ localtime:
     .endloop1:
 
 
-    mov rax, rcx 
-    mov rbx, 20
-    call print_number
-    call print_test
+    mov [tm.mon], cl
 
-    mov rax, rdx 
-    mov rbx, 20
-    call print_number
-    call print_test
+    mov [tm.mday], dl
+
+    mov byte [tm.isdst], day_light_savings
 
     pop r10
     pop rbx
@@ -1025,7 +1127,47 @@ localtime:
     ret 
     .month_lengths: dw 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 
-    
+
+print_localtime:
+    ;Run the Local time function then call this function to print all Tm Values 
+    mov rbx, 5
+    mov rax, 0
+    mov al, [tm.sec]
+    call print_number
+    call print_newline
+    mov rax, 0 
+    mov al, [tm.min] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov al, [tm.hour] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov al, [tm.mday] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov al, [tm.mon] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov eax, [tm.year] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov al, [tm.wday] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov ax, [tm.yday] 
+    call print_number
+    call print_newline
+    mov rax, 0
+    mov al, [tm.isdst] 
+    call print_number
+    call print_newline
+    ret
 
 timef:
     ;rax is a pointer to the output if not null 
@@ -1744,6 +1886,29 @@ print_test:
     .message: db "Test" , 0x0A
 
 
+
+    print_newline: 
+
+    push rax
+    push rdi
+    push rsi 
+    push rdx
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, .message
+    mov rdx, 1
+    syscall
+
+    pop rdx
+    pop rsi 
+    pop rdi
+    pop rax
+    ret 
+
+    .message: db 0x0A
+
+
 done: ;Code is Done
 
     mov rax, 1
@@ -1975,15 +2140,15 @@ FAT32_Dir_Entry_Short:
 FAT32_Dir_Entry_Short_size equ $ - FAT32_Dir_Entry_Short
 
 tm:
-    .tm_sec: dw 0
-    .tm_min: dw 0
-    .tm_hour: dw 0
-    .tm_mday: dw 0
-    .tm_mon: dw 0
-    .tm_year: dw 0
-    .tm_wday: dw 0
-    .tm_yday: dw 0
-    .tm_isdst: dw 0
+    .sec:   db 0 ;seconds,  range 0 to 59
+    .min:   db 0 ;minutes, range 0 to 59
+    .hour:  db 0 ;hours, range 0 to 23
+    .mday:  db 0 ;day of the month, range 1 to 31
+    .mon:   db 0 ;month, range 0 to 11
+    .year:  dd 0 ;The number of years since 1900
+    .wday:  db 0 ;day of the week, range 0 to 6
+    .yday:  dw 0 ;day in the year, range 0 to 36
+    .isdst: db 0 ;daylight saving time
 
 FAT32_Dir_Attr:
     ATTR_READ_ONLY equ 0x01
@@ -2026,16 +2191,44 @@ LINUX_SYSCALL:
     .stat_SYSCALL:  equ 4
     .fstat_SYSCALL: equ 5
     .lstat_SYSCALL: equ 6
-    .poll:            equ 7
-    .lseek:          equ 8
+    .poll:          equ 7
+    .lseek:         equ 8
         SEEK_SET        equ 0
         SEEK_CUR        equ 1
         SEEK_END        equ 2
     .mmap_SYSCALL:  equ 9
+        PROT_READ	    equ 0x1		/* page can be read */
+        PROT_WRITE	    equ 0x2		/* page can be written */
+        PROT_EXEC	    equ 0x4	    /* page can be executed */
+        PROT_NONE	    equ 0x0	
+
+        MAP_SHARED	    equ 0x01		/* Share changes */
+        MAP_PRIVATE	    equ 0x02		/* Changes are private */
+        MAP_SHARED_VALIDATE equ  0x03	/* share + validate extension flags */
+        MAP_FIXED	    equ 0x100		/* Interpret addr exactly */
+        MAP_ANONYMOUS	equ 0x10        /* don't use a file */
+        MAP_FIXED_NOREPLACE	equ 0x200000/* MAP_FIXED which doesn't unmap underlying mapping */
+        MAP_GROWSDOWN	equ 0x01000		/* stack-like segment */
+        MAP_HUGETLB 	equ 0x100000	/* create a huge page mapping */
+        MAP_LOCKED	    equ 0x08000		/* lock the mapping */
+        MAP_NONBLOCK    equ 0x40000		/* do not block on IO */
+        MAP_NORESERVE	equ 0x10000		/* don't check for reservations */
+        MAP_POPULATE    equ 0x20000		/* populate (prefault) pagetables */
+        MAP_STACK	    equ 0x80000		/* give out an address that is best suited for process/thread stacks */
+        MAP_UNINITIALIZED equ  0x4000000	/* For anonymous mmap, memory could be uninitialized */
+        MAP_SYNC		equ 0x080000 /* perform synchronous page faults for the mapping */
+        MAP_32BIT	    equ 0x40	
+        MAP_HUGE_2MB    equ 21 << MAP_HUGE_SHIFT
+        MAP_HUGE_2MB    equ 30 << MAP_HUGE_SHIFT
+
+
     .mporotect:     equ 10
-    .time: equ 201
+    .munmap:        equ 11
+    .time:          equ 201
 
 
+
+MAP_HUGE_SHIFT equ 26	
 
 LINUX_ERRORS:
     EPERM equ           1  ;Operation not permitted
