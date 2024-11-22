@@ -916,11 +916,41 @@ add_file_to_esp:
 
     jmp .endif4
     .elseif4:
+        mov rax, 0
+        mov rbx, lba_size
+        mov rcx, PROT_WRITE | PROT_READ
+        mov rdx, MAP_PRIVATE | MAP_ANONYMOUS
+        mov r10, 0
+        mov r9, 0
+        call mmap
 
+        mov r10, 0 
+        .startloop4:
+        cmp r10, [file_size_lbas]
+        jge .endloop4
 
+        push rax
+        mov rbx, rax
+        mov rax, [Boot64]
+        mov rcx, lba_size
+        call fread
+        mov rcx, rax 
+        pop rax
 
+        push rax
+        mov rbx, rax
+        mov rax, [image]
+        ; size already set 
+        call fwrite
+        pop rax 
 
+        inc r10
+        jmp .startloop4
+        .endloop4:
 
+        mov rbx, lba_size
+        call munmap
+        call done 
     .endif4:
 
 
@@ -1128,6 +1158,58 @@ localtime:
     .month_lengths: dw 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 
 
+mmap:
+    ;rax is the starting address address and the pointer to the region
+    ;rbx is the length of the mapping 
+    ;rcx is the prot memory protection 
+    ;rdx is the flags  
+    ;r10 is the file pointer 
+    ;r9 is the offset 
+    push rbx
+    push rcx
+    push rdx 
+    push r10
+    push r9
+
+    mov r9, r9
+    mov r8, r10
+    mov r10, rdx 
+    mov rdx, rcx 
+    mov rsi, rbx 
+    mov rdi, rax 
+    mov rax, LINUX_SYSCALL.mmap
+    syscall
+
+
+
+    call check_Error
+
+    pop r9
+    pop r10
+    pop rdx 
+    pop rcx
+    pop rbx
+
+    ret 
+
+
+
+
+munmap:
+    ;rax is the address to the mapping 
+    ;rbx is the length of the mapping 
+    push rbx
+    mov rsi, rbx 
+    mov rdi, rax 
+    mov rax, LINUX_SYSCALL.munmap
+    syscall
+
+    call check_Error
+
+    pop rbx 
+    ret 
+
+
 print_localtime:
     ;Run the Local time function then call this function to print all Tm Values 
     mov rbx, 5
@@ -1265,7 +1347,7 @@ memcmp:
 
 
 fread:
-    ;rax is the file pointer 
+    ;rax is the file pointer and number of bytes read 
     ;rbx is the location the output read from file 
     ;rcx is the count of bytes taken from the file 
     push rdx
@@ -1818,6 +1900,49 @@ check_Error: ;Code is Done
     mov rbx, LINUX_ERRORS.ENOENT
     cmp rax, ENOENT
     je .print
+
+    mov rbx, LINUX_ERRORS.EACCES
+    cmp rax, EACCES
+    je .print
+
+    mov rbx, LINUX_ERRORS.EAGAIN
+    cmp rax, EAGAIN
+    je .print
+
+    mov rbx, LINUX_ERRORS.EEXIST
+    cmp rax, EEXIST
+    je .print
+    
+    mov rbx, LINUX_ERRORS.EINVAL
+    cmp rax, EINVAL
+    je .print
+
+    mov rbx, LINUX_ERRORS.ENFILE
+    cmp rax, ENFILE
+    je .print
+
+    mov rbx, LINUX_ERRORS.ENODEV
+    cmp rax, ENODEV
+    je .print
+
+    mov rbx, LINUX_ERRORS.ENOMEM
+    cmp rax, ENOMEM
+    je .print
+
+    mov rbx, LINUX_ERRORS.EOVERFLOW
+    cmp rax, EOVERFLOW
+    je .print
+
+    mov rbx, LINUX_ERRORS.EPERM
+    cmp rax, EPERM
+    je .print
+
+    mov rbx, LINUX_ERRORS.ETXTBSY
+    cmp rax, ETXTBSY
+    je .print
+
+
+
     
     mov rbx, .unknown
     .print:
@@ -2196,30 +2321,30 @@ LINUX_SYSCALL:
         SEEK_SET        equ 0
         SEEK_CUR        equ 1
         SEEK_END        equ 2
-    .mmap_SYSCALL:  equ 9
-        PROT_READ	    equ 0x1		/* page can be read */
-        PROT_WRITE	    equ 0x2		/* page can be written */
-        PROT_EXEC	    equ 0x4	    /* page can be executed */
+    .mmap:          equ 9
+        PROT_READ	    equ 0x1		; page can be read */
+        PROT_WRITE	    equ 0x2		; page can be written */
+        PROT_EXEC	    equ 0x4	    ; page can be executed */
         PROT_NONE	    equ 0x0	
 
-        MAP_SHARED	    equ 0x01		/* Share changes */
-        MAP_PRIVATE	    equ 0x02		/* Changes are private */
-        MAP_SHARED_VALIDATE equ  0x03	/* share + validate extension flags */
-        MAP_FIXED	    equ 0x100		/* Interpret addr exactly */
-        MAP_ANONYMOUS	equ 0x10        /* don't use a file */
-        MAP_FIXED_NOREPLACE	equ 0x200000/* MAP_FIXED which doesn't unmap underlying mapping */
-        MAP_GROWSDOWN	equ 0x01000		/* stack-like segment */
-        MAP_HUGETLB 	equ 0x100000	/* create a huge page mapping */
-        MAP_LOCKED	    equ 0x08000		/* lock the mapping */
-        MAP_NONBLOCK    equ 0x40000		/* do not block on IO */
-        MAP_NORESERVE	equ 0x10000		/* don't check for reservations */
-        MAP_POPULATE    equ 0x20000		/* populate (prefault) pagetables */
-        MAP_STACK	    equ 0x80000		/* give out an address that is best suited for process/thread stacks */
-        MAP_UNINITIALIZED equ  0x4000000	/* For anonymous mmap, memory could be uninitialized */
-        MAP_SYNC		equ 0x080000 /* perform synchronous page faults for the mapping */
+        MAP_SHARED	    equ 0x01		; Share changes */
+        MAP_PRIVATE	    equ 0x02		; Changes are private */
+        MAP_SHARED_VALIDATE equ  0x03	; share + validate extension flags */
+        MAP_FIXED	    equ 0x10		; Interpret addr exactly */
+        MAP_ANONYMOUS	equ 0x20        ; don't use a file */
+        MAP_FIXED_NOREPLACE	equ 0x200000; MAP_FIXED which doesn't unmap underlying mapping */
+        MAP_GROWSDOWN	equ 0x01000		; stack-like segment */
+        MAP_HUGETLB 	equ 0x100000	; create a huge page mapping */
+        MAP_LOCKED	    equ 0x08000		; lock the mapping */
+        MAP_NONBLOCK    equ 0x40000		; do not block on IO */
+        MAP_NORESERVE	equ 0x10000		; don't check for reservations */
+        MAP_POPULATE    equ 0x20000		; populate (prefault) pagetables */
+        MAP_STACK	    equ 0x80000		; give out an address that is best suited for process/thread stacks */
+        MAP_UNINITIALIZED equ  0x4000000	; For anonymous mmap, memory could be uninitialized */
+        MAP_SYNC		equ 0x080000 ; perform synchronous page faults for the mapping */
         MAP_32BIT	    equ 0x40	
         MAP_HUGE_2MB    equ 21 << MAP_HUGE_SHIFT
-        MAP_HUGE_2MB    equ 30 << MAP_HUGE_SHIFT
+        MAP_HUGE_1GB    equ 30 << MAP_HUGE_SHIFT
 
 
     .mporotect:     equ 10
