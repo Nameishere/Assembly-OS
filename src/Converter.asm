@@ -1,5 +1,11 @@
 [bits 64]
 
+%include "src/timelib.asm"
+%include "src/errorlib.asm"
+%include "src/strlib.asm"
+%include "src/stdlib.asm"
+%include "src/conslib.asm"
+
 section .text
 global _start          ;must be declared for linker (ld)
 
@@ -181,8 +187,13 @@ write_esp:
 
         call file_seek
 
-        mov eax, 0xFFFFFFFB
+        mov eax, 0xFFFFFFF8
         mov [cluster], eax ;0xFFFFFF00 | Vbr.BPB_Media
+        mov rax, cluster
+        times 4 call write_to_file
+
+        mov eax, 0xFFFFFFFF
+        mov [cluster], eax
         mov rax, cluster
         times 4 call write_to_file
 
@@ -323,6 +334,8 @@ add_path_to_esp:
     .loop1_start:
         cmp rdx, TYPE_DIR
         jne .loop1_end
+
+
         .loop2_start:
             mov cl, '/'
             cmp [r10], cl
@@ -336,6 +349,8 @@ add_path_to_esp:
             jmp .loop2_start
         .loop2_end:
         mov cl, '/'
+
+        ; call print_test
         cmp [r10], cl
         je .if
         jmp .else
@@ -349,6 +364,13 @@ add_path_to_esp:
         .end:
 
         mov byte [r10], 0
+
+        ;print start 
+        ; push rax 
+        
+        ; call print_string
+        ; pop rax
+
         
         mov r9, 0
         mov r9b, '.'
@@ -577,27 +599,45 @@ add_path_to_esp:
         jmp .check4
         .check3:
 
+
         push rax 
+        
+        ; push rax 
+        ; push rbx 
+        ; mov rax, r10
+        ; mov rbx, 10
+        ; call print_number
+        ; pop rbx 
+        ; pop rax 
 
         mov rax, rdx
         call add_file_to_esp
+        
+        ; push rax 
+        ; push rbx 
+        ; mov rax, r10
+        ; mov rbx, 10
+        ; call print_number
+        ; pop rbx 
+        ; pop rax 
+
+
 
         pop rax
 
 
         .check4:
 
-
-
-
         inc r10
         mov rax, r10
+
+
 
         jmp .loop1_start
         
     .loop1_end:
     
-    
+
     ret 
 
 
@@ -608,7 +648,12 @@ add_file_to_esp:
     push rbx
     push rcx
     push rdx
+    push r10
+    push r9
+    push r8
 
+    ; call print_test
+    
     push rax
     mov rax, Vbr
     mov rbx, Vbr_size
@@ -655,6 +700,9 @@ add_file_to_esp:
     mov rbx, 0
     mov rcx, SEEK_END
     call fseek
+
+
+
     mov [file_size_bytes], rax
 
     call bytes_to_lbas
@@ -760,6 +808,8 @@ add_file_to_esp:
         jmp .startloop1
     .endloop1:
 
+
+    
     mov eax, [next_free_cluster]
     mov [FSInfo.FSI_Nxt_Free], eax
 
@@ -810,6 +860,10 @@ add_file_to_esp:
     cmp al, 0 
     je .endloop3
 
+
+    jmp .startloop3
+    .endloop3:
+
     mov rbx, -32
     mov rax, [image]
     mov rcx, SEEK_CUR
@@ -821,7 +875,6 @@ add_file_to_esp:
     mov rcx, 11
     call memcopy
 
-    
     
     pop rax
     push rax
@@ -856,8 +909,9 @@ add_file_to_esp:
     cmp rax, TYPE_FILE
     jne .endif3
 
-    mov rax, [file_size_lbas]
+    mov rax, [file_size_bytes]
     mov [FAT32_Dir_Entry_Short.DIR_FileSize], rax
+
     
     .endif3:
 
@@ -884,8 +938,8 @@ add_file_to_esp:
     cmp rax, TYPE_DIR
     jne .elseif4
 
-    mov rax, .String1
-    mov rbx, FAT32_Dir_Entry_Short.DIR_Name
+    mov rax, FAT32_Dir_Entry_Short.DIR_Name
+    mov rbx, .String1
     mov rcx, 11
     call memcopy
 
@@ -894,11 +948,12 @@ add_file_to_esp:
     mov rcx, FAT32_Dir_Entry_Short_size
     call fwrite
 
-    mov rax, .String2
-    mov rbx, FAT32_Dir_Entry_Short.DIR_Name
+    mov rax, FAT32_Dir_Entry_Short.DIR_Name
+    mov rbx, .String2
     mov rcx, 11
     call memcopy
 
+    
     mov rax, 0
     mov eax, [dir_cluster]
     shr rax, 16 
@@ -913,6 +968,7 @@ add_file_to_esp:
     mov rbx, FAT32_Dir_Entry_Short
     mov rcx, FAT32_Dir_Entry_Short_size
     call fwrite
+
 
     jmp .endif4
     .elseif4:
@@ -950,23 +1006,31 @@ add_file_to_esp:
 
         mov rbx, lba_size
         call munmap
-        call done 
     .endif4:
 
+    pop rax 
+    push rax
 
+    cmp rax, TYPE_DIR
+    jne .endif5
 
+    mov rax, [starting_cluster]
+    mov [dir_cluster], rax 
 
-    ; call done
-    call print_test
-    jmp .startloop3
-    .endloop3:
+    .endif5:
 
-    
-    pop rax
+    pop rax 
+
+    pop r8
+    pop r9
+    pop r10
     pop rdx
     pop rcx
     pop rbx
-    pop rcx
+    pop rax
+    
+
+
     ret
 
     .String1: db ".          "
@@ -1017,280 +1081,6 @@ get_fat_dir_entry_time_date:
     ret
 
 
-localtime:
-    ;divide to get the number of minutes since epoch in rax and currenty seconds in rdx 
-    push rcx
-    push rax 
-    push rdx 
-    push rbx
-    push r10
-
-    mov rdx, 0
-    mov rcx, 60 
-    div rcx
-
-    ; rdx is the current seconds time  
-    mov [tm.sec], dl
-
-    ;divide to get the number of hours since epoch in rax and current minutes in rdx 
-    mov rdx, 0
-    mov rcx, 60 
-    div rcx
-
-    ; rdx is the current minutes 
-    mov [tm.min], dl
-
-    ; convert to time zone and daylight savings
-    add rax, nz_time
-    add rax, day_light_savings
-
-    ;divide by 24 to get the number of days since epoch in rax and current hours in rdx
-    mov rdx, 0
-    mov rcx, 24 
-    div rcx
-
-    ; rdx is the current hours 
-    mov [tm.hour], dl
-
-    ;At this point rax is the number of days 
-    ;need: number of years, day of year, months, day of month and day of week
-
-
-    ;Calculate the day of the week 
-    push rax 
-    add rax, 3 ;account for not starting on monday 
-    mov rdx, 0
-    mov rcx, 7
-    div rcx
-    mov [tm.wday], dl
-    pop rax
-
-
-    ;calculate year 
-    add rax, 365*2 + 1  ;account for leap year timings 
-    
-    mov rdx, 0
-    mov rcx, 4
-    mul rcx
-    mov rdx, 0
-    mov rcx, 1461 ;365*4 + 1
-    div rcx
-    sub rax, 2
-
-
-    ;Year 
-    push rax 
-    push rdx 
-    mov rcx, 70
-    add rax, rcx
-    mov [tm.year], eax
-    pop rdx
-    pop rax 
-
-    ;caluculate day of year 
-    push rax 
-    mov rax, rdx
-    
-    mov rdx, 0
-    mov rcx, 4
-    div rcx
-
-    mov [tm.yday], ax
-
-    mov rdx, rax
-    pop rax
-
-
-
-    push rdx
-    mov rdx,0 
-    mov rcx, 4
-    div rcx
-    mov rax, rdx
-    sub rax, 2
-    pop rdx
-    
-    ;at this point rdx is the day of the year and rax is remainder of year /4 (0 when leap)
-    ;need day of month and month
-    mov rcx, 0 ; month
-    mov r10, .month_lengths
-    .startloop1:
-    cmp rax, 0
-    jne .ifend1 
-    
-    cmp rcx, 1
-    je .ifend2
-    
-    .ifend1:
-    cmp dx, [r10]
-    jl .endloop1
-    sub dx, [r10]
-    jmp .else1
-    .ifend2:
-    
-    cmp dx, 29
-    jl .endloop1
-    sub dx, 29
-    .else1:
-
-
-    
-    inc r10
-    inc r10
-    inc rcx
-    jmp .startloop1 
-    .endloop1:
-
-
-    mov [tm.mon], cl
-
-    mov [tm.mday], dl
-
-    mov byte [tm.isdst], day_light_savings
-
-    pop r10
-    pop rbx
-    pop rdx
-    pop rax
-    pop rcx
-
-    ret 
-    .month_lengths: dw 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-
-
-mmap:
-    ;rax is the starting address address and the pointer to the region
-    ;rbx is the length of the mapping 
-    ;rcx is the prot memory protection 
-    ;rdx is the flags  
-    ;r10 is the file pointer 
-    ;r9 is the offset 
-    push rbx
-    push rcx
-    push rdx 
-    push r10
-    push r9
-
-    mov r9, r9
-    mov r8, r10
-    mov r10, rdx 
-    mov rdx, rcx 
-    mov rsi, rbx 
-    mov rdi, rax 
-    mov rax, LINUX_SYSCALL.mmap
-    syscall
-
-
-
-    call check_Error
-
-    pop r9
-    pop r10
-    pop rdx 
-    pop rcx
-    pop rbx
-
-    ret 
-
-
-
-
-munmap:
-    ;rax is the address to the mapping 
-    ;rbx is the length of the mapping 
-    push rbx
-    mov rsi, rbx 
-    mov rdi, rax 
-    mov rax, LINUX_SYSCALL.munmap
-    syscall
-
-    call check_Error
-
-    pop rbx 
-    ret 
-
-
-print_localtime:
-    ;Run the Local time function then call this function to print all Tm Values 
-    mov rbx, 5
-    mov rax, 0
-    mov al, [tm.sec]
-    call print_number
-    call print_newline
-    mov rax, 0 
-    mov al, [tm.min] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov al, [tm.hour] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov al, [tm.mday] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov al, [tm.mon] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov eax, [tm.year] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov al, [tm.wday] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov ax, [tm.yday] 
-    call print_number
-    call print_newline
-    mov rax, 0
-    mov al, [tm.isdst] 
-    call print_number
-    call print_newline
-    ret
-
-timef:
-    ;rax is a pointer to the output if not null 
-
-    push rdx
-    push rsi
-    push rdi
-    mov rdx, 0       ;message length
-    mov rsi, 0        ;message to write
-    mov rdi, rax        ;file descriptor
-    mov rax, LINUX_SYSCALL.time  
-    syscall            ;call kernel   
-
-    call check_Error
-    pop rdi
-    pop rsi
-    pop rdx
-    
-
-    ret
-
-fwrite:
-    ;rax is a pointer to the file 
-    ;rbx is a pointer to the input 
-    ;rcx is the size to input 
-
-    push rax
-    push rdx
-    push rsi
-    push rdi
-    mov rdx, rcx       ;message length
-    mov rsi, rbx        ;message to write
-    mov rdi, rax        ;file descriptor
-    mov rax, LINUX_SYSCALL.write  
-    syscall            ;call kernel    
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rax
-
-    ret
 
 bytes_to_lbas:
     push rbx
@@ -1302,273 +1092,6 @@ bytes_to_lbas:
     pop rbx
 
     ret
-
-
-
-
-
-memcmp:
-    ;rax is the input of the first memory pointer , and the true or false output
-    ;rbx is the input of the second memory
-    ;rcx is the length of the comparison 
-    ;internal registers: rdx, r10
-    push rdx
-    push rbx
-    push rcx
-    push r10
-    mov rdx, 0 
-    .loop:
-    ; call print_test
-
-    mov r10b, [rbx]
-    cmp [rax], r10b
-    jne .fail
-    inc rax
-    inc rbx
-    inc rdx
-
-    cmp rdx, rcx
-    jl .loop
-
-    mov rax, 1
-    jmp .end
-
-    .fail:
-    mov rax, 0
-
-    .end:
-
-    pop r10
-    pop rcx
-    pop rbx
-    pop rdx
-    ret
-
-
-
-fread:
-    ;rax is the file pointer and number of bytes read 
-    ;rbx is the location the output read from file 
-    ;rcx is the count of bytes taken from the file 
-    push rdx
-    push rdi 
-    push rsi
-    mov rdi, rax
-    mov rsi, rbx
-    mov rdx, rcx     
-    mov rax, LINUX_SYSCALL.read_SYSCALL
-    syscall
-
-
-    call check_Error
-    pop rsi
-    pop rdi
-    pop rdx
-    ret
-
-
-
-strncpy:; registers used: rax, rbx, rcx, rdx
-    ;rax is the string to be set 
-    ;rbx is pointer to value to copy
-    ;rcx is the length of the string 
-    ;only inside: rdx
-    push rax
-    push rbx
-    push rcx
-    push rdx
-    mov rdx, 0 
-    .loop1_start:
-    cmp rdx, rcx
-    je .loop1_end
-
-    cmp byte [rbx], 0
-    je .loop1_end
-    push rcx
-    mov rcx, [rbx]
-    mov [rax], rcx
-    pop rcx
-    inc rax 
-    inc rbx 
-    jmp .loop1_start
-    .loop1_end:
-
-    pop rdx
-    pop rcx
-    pop rbx
-    pop rax
-    ret 
-
-
-strlen:; registers used: rax
-    ;rax is the string to be set and the number returned
-    push rbx
-    mov rbx, 0
-    .loop1_start:
-
-    cmp byte [rax], 0
-    je .loop1_end
-
-    inc rbx
-    inc rax 
-    ; push rax
-    ; mov rax, rbx
-    ; call print_number
-    ; pop rax
-    jmp .loop1_start
-    .loop1_end:
-    mov rax, rbx
-    pop rbx
-
-    ret 
-
-
-memcopy:; registers used: rax, rbx, rcx, rdx
-    ;rax is the string to be set 
-    ;rbx is pointer to value to copy
-    ;rcx is the length of the string 
-    ;only inside: rdx
-    push rax
-    push rbx
-    push rdx
-    mov rdx, 0
-
-    .loop1_start:
-
-    cmp rdx, rcx
-    je .loop1_end
-
-    ; call print_test
-    push rcx
-    mov rcx, 0
-    mov cl, [rbx]
-    mov [rax], cl
-    pop rcx
-
-    inc rax 
-    inc rbx 
-    inc rdx
-    jmp .loop1_start
-    .loop1_end:
-
-    pop rdx
-    pop rbx
-    pop rax
-
-    ret 
-
-
-zeroarray: ;registers used: rax, rbx, rcx 
-    ;rax is the string 
-    ;rbx is the length 
-    ;only inside: rcx
-   push rax
-   push rbx
-   push rcx
-    mov rcx, 0
-    .loop1_start:
-        cmp rbx, rcx 
-        je .loop1_end
-        mov byte [rax], 0
-        inc rcx
-        
-        jmp .loop1_start
-    .loop1_end:
-
-    pop rcx
-    pop rbx
-    pop rax
-    ret 
-
-
-
-memset: ;registers used: rax, rbx, rcx, rdx 
-    ;rax is a pointer to the start of the sting 
-    ;rbx is the length of the string to be set to rax 
-    ;rcx is the character to set the values to 
-    ;only inside: rdx 
-    push rax
-    push rbx
-    push rcx
-    push rdx
-
-    mov rdx, 0
-    .loop1_start:
-        cmp rbx, rdx 
-        je .loop1_end
-        mov [rax], cl
-        inc rdx
-        inc rax
-        
-        
-        jmp .loop1_start
-    .loop1_end:
-
-    pop rdx
-    pop rcx
-    pop rbx
-    pop rax
-
-    ret 
-
-
-strchr:
-    ;rax is pointer to start of string is kept the same 
-    ;r9 is character to compare and will be position if true (r9l)
-    
-    push rax 
-
-    .loop1_start:
-        cmp [rax], r9b
-        je .loop1_end2
-        inc rax
-
-
-        cmp byte [rax], 0
-        je .loop1_end1
-        
-        jmp .loop1_start
-    .loop1_end1:
-    mov rax, 0 
-    .loop1_end2:
-    mov r9, rax 
-    pop rax 
-    ret
-
-
-String_to_Upper:
-    ;rax is the pointer to the string for input and output
-    ;rbx is the length of the string for input and output
-    push rax
-    push rbx 
-    
-    mov r10, rbx 
-    mov r9, 0
-    .loop_start:
-        cmp byte [rax], 122
-        jg .else
-
-        cmp byte [rax], 97
-        jl  .else
-
-    .if:
-        mov rbx, [rax]
-        mov rcx, 32
-        Sub rbx, rcx
-        mov [rax], rbx
-
-    .else:
-        inc rax 
-        inc r9
-        cmp r9, r10
-
-        jl .loop_start
-
-
-    pop rbx
-    pop rax 
-    ret
-
 
 
 new_guid:
@@ -1758,30 +1281,6 @@ file_seek:
     pop rax
     ret
 
-fseek:
-    ;uses lseek linux function
-    ;rax is file
-    ;rbx is destination in file 
-    ;rcx is type of Search  
-
-    push rdx
-    push rdi 
-    push rsi
-
-
-    mov rdi, rax
-    mov rsi, rbx
-    mov rdx, rcx     
-    mov rax, LINUX_SYSCALL.lseek
-    syscall
-
-    call check_Error
-
-    pop rsi
-    pop rdi
-    pop rdx
-    ret
-
 
 
 
@@ -1826,192 +1325,6 @@ write_zero_to_file: ;rax is pointer to start of stuff to write to file
     ret
     .zero: db 0x00
 
-
-print_number: 
-    ;rax is input number 
-    ;rbx is digits printed 
-    ;internal registers: rcx, rdx, rdi, rsi, r10
-    push rax
-    push rbx
-    push rcx
-    push rdx
-    push rdi 
-    push rsi 
-    push r10
-
-    mov r10, 0 ;loop Count initiliased 
-    push 0x0A ; add new line to stack
-
-    .loop:
-    mov rdx, 0 ;zero rdx
-    mov rcx, 10 ;base ten 
-
-    div rcx ; rax = rax / rcx, rdx = remainder 
-
-    add rdx, 0x30 ;convert to ASCI
-
-    push rdx ; add to stack 
-
-    ; call print_test
-    inc r10
-    
-    cmp r10, rbx ;check if loop is done 
-     
-    jl .loop
-
-    mov rax, 8
-    mul rbx ; rax = rbx * rax
-    mov rdx, rax
-    mov rax, LINUX_SYSCALL.write  
-    mov rdi, write_console
-    mov rsi, rsp ;print stack
-    syscall
-
-    inc r10 
-    mov rax, 8
-    mul r10
-    add rsp, rax 
-
-
-    pop r10
-    pop rsi 
-    pop rdi 
-    pop rdx
-    pop rcx
-    pop rbx
-    pop rax
-    ret
-
-
-
-check_Error: ;Code is Done
-    cmp rax, 0
-    jl .Error
-    ret 
-
-    .Error:
-    mov rcx, -1
-    mul rcx
-
-    mov rbx, LINUX_ERRORS.EBADF
-    cmp rax, EBADF
-    je .print
-
-    mov rbx, LINUX_ERRORS.ENOENT
-    cmp rax, ENOENT
-    je .print
-
-    mov rbx, LINUX_ERRORS.EACCES
-    cmp rax, EACCES
-    je .print
-
-    mov rbx, LINUX_ERRORS.EAGAIN
-    cmp rax, EAGAIN
-    je .print
-
-    mov rbx, LINUX_ERRORS.EEXIST
-    cmp rax, EEXIST
-    je .print
-    
-    mov rbx, LINUX_ERRORS.EINVAL
-    cmp rax, EINVAL
-    je .print
-
-    mov rbx, LINUX_ERRORS.ENFILE
-    cmp rax, ENFILE
-    je .print
-
-    mov rbx, LINUX_ERRORS.ENODEV
-    cmp rax, ENODEV
-    je .print
-
-    mov rbx, LINUX_ERRORS.ENOMEM
-    cmp rax, ENOMEM
-    je .print
-
-    mov rbx, LINUX_ERRORS.EOVERFLOW
-    cmp rax, EOVERFLOW
-    je .print
-
-    mov rbx, LINUX_ERRORS.EPERM
-    cmp rax, EPERM
-    je .print
-
-    mov rbx, LINUX_ERRORS.ETXTBSY
-    cmp rax, ETXTBSY
-    je .print
-
-
-
-    
-    mov rbx, .unknown
-    .print:
-
-    mov rax, .Error_Message
-    call print_string
-
-    mov rax, rbx
-    call print_string
-    
-    .end_program:
-    mov eax, 60
-    xor rdi, rdi
-    syscall
-
-    .unknown: db "Unknown Error", 0 
-    .Error_Message: db "Error: " , 0
-
-
-
-print_string: ;rax is pointer to string
-
-    push rax
-    push rcx
-    push rax
-    push rdx
-    push rdi
-    push rsi
-
-    mov rsi, rax
-    call strlen
-    mov rdx, rax
-    mov rax, LINUX_SYSCALL.write
-    mov rdi, write_console
-    syscall
-
-    
-    pop rsi
-    pop rdi
-    pop rdx
-    pop rax
-    pop rcx
-    pop rax
-    ret
-
-
-print_test: 
-
-    push rax
-    push rdi
-    push rsi 
-    push rdx
-
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, .message
-    mov rdx, 5
-    syscall
-
-    pop rdx
-    pop rsi 
-    pop rdi
-    pop rax
-    ret 
-
-    .message: db "Test" , 0x0A
-
-
-
     print_newline: 
 
     push rax
@@ -2034,20 +1347,6 @@ print_test:
     .message: db 0x0A
 
 
-done: ;Code is Done
-
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, .message
-    mov rdx, 13
-    syscall
-
-    mov eax, 60
-    xor rdi, rdi
-    syscall
-
-    .message: 
-        dd "Code is done", 10
 ;========================================================
 ;Data
 ;========================================================
@@ -2059,11 +1358,11 @@ section .data
 
     ;Boot64.efi
     Boot64 dq 0
-    Boot64_name db 'src/BOOTX64.asm', 0
+    Boot64_name db 'bin/BOOTX64.EFI', 0
 
     ;Vars 
     cluster dd 0
-    path db "/EFI/BOOT/DSKIMG.INF", 0
+    path db "/EFI/BOOT/BOOTX64.EFI", 0
     path_size equ $-path
 
     ;rand_arr
@@ -2283,340 +1582,6 @@ FAT32_Dir_Attr:
     ATTR_DIRECTORY equ 0x10
     ATTR_ARCHIVE   equ 0x20
     ATTR_LONG_NAME equ ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID
-
-
-LINUX_SYSCALL:
-    .read_SYSCALL:  equ 0 
-    .write: equ 1
-        write_console   equ 1
-    .open:  equ 2;int open(const char *pathname, int flags, /* mode_t mode */ );
-        O_RDONLY        equ 0000o ;Read only 
-        O_WRONLY        equ 0001o ;write only 
-        O_RDWR          equ 0002o ;read and write
-        O_CREAT         equ 0100o ;if file doesn't exist create it 
-
-        ;modes for O_CREAT
-        S_IRWXU         equ 00700o ; user (file owner) has read, write, and execute permission
-        S_IRUSR         equ 00400o ; user has read permission
-        S_IWUSR         equ 00200o ; user has write permission
-        S_IXUSR         equ 00100o ; user has execute permission
-        S_IRWXG         equ 00070o ; group has read, write, and execute permission
-        S_IRGRP         equ 00040o ; group has read permission
-        S_IWGRP         equ 00020o ; group has write permission
-        S_IXGRP         equ 00010o ; group has execute permission
-        S_IRWXO         equ 00007o ; others have read, write, and execute permission
-        S_IROTH         equ 00004o ; others have read permission
-        S_IWOTH         equ 00002o ; others have write permission
-        S_IXOTH         equ 00001o ; others have execute permission
-
-        S_ISUID         equ 00040o ;00 set-user-ID bit
-        S_ISGID         equ 00020o ;00 set-group-ID bit (see inode(7)).
-        S_ISVTX         equ 00010o ;00 sticky bit (see inode(7)).
-    .close_SYSCALL: equ 3
-    .stat_SYSCALL:  equ 4
-    .fstat_SYSCALL: equ 5
-    .lstat_SYSCALL: equ 6
-    .poll:          equ 7
-    .lseek:         equ 8
-        SEEK_SET        equ 0
-        SEEK_CUR        equ 1
-        SEEK_END        equ 2
-    .mmap:          equ 9
-        PROT_READ	    equ 0x1		; page can be read */
-        PROT_WRITE	    equ 0x2		; page can be written */
-        PROT_EXEC	    equ 0x4	    ; page can be executed */
-        PROT_NONE	    equ 0x0	
-
-        MAP_SHARED	    equ 0x01		; Share changes */
-        MAP_PRIVATE	    equ 0x02		; Changes are private */
-        MAP_SHARED_VALIDATE equ  0x03	; share + validate extension flags */
-        MAP_FIXED	    equ 0x10		; Interpret addr exactly */
-        MAP_ANONYMOUS	equ 0x20        ; don't use a file */
-        MAP_FIXED_NOREPLACE	equ 0x200000; MAP_FIXED which doesn't unmap underlying mapping */
-        MAP_GROWSDOWN	equ 0x01000		; stack-like segment */
-        MAP_HUGETLB 	equ 0x100000	; create a huge page mapping */
-        MAP_LOCKED	    equ 0x08000		; lock the mapping */
-        MAP_NONBLOCK    equ 0x40000		; do not block on IO */
-        MAP_NORESERVE	equ 0x10000		; don't check for reservations */
-        MAP_POPULATE    equ 0x20000		; populate (prefault) pagetables */
-        MAP_STACK	    equ 0x80000		; give out an address that is best suited for process/thread stacks */
-        MAP_UNINITIALIZED equ  0x4000000	; For anonymous mmap, memory could be uninitialized */
-        MAP_SYNC		equ 0x080000 ; perform synchronous page faults for the mapping */
-        MAP_32BIT	    equ 0x40	
-        MAP_HUGE_2MB    equ 21 << MAP_HUGE_SHIFT
-        MAP_HUGE_1GB    equ 30 << MAP_HUGE_SHIFT
-
-
-    .mporotect:     equ 10
-    .munmap:        equ 11
-    .time:          equ 201
-
-
-
-MAP_HUGE_SHIFT equ 26	
-
-LINUX_ERRORS:
-    EPERM equ           1  ;Operation not permitted
-    ENOENT equ          2  ;No such file or directory
-    ESRCH equ           3  ;No such process
-    EINTR equ           4  ;Interrupted system call
-    EIO equ             5  ;I/O error
-    ENXIO equ           6  ;No such device or address
-    E2BIG equ           7  ;Argument list too long
-    ENOEXEC equ         8  ;Exec format error
-    EBADF equ           9  ;Bad file number
-    ECHILD equ          10 ;No child processes
-    EAGAIN equ          11 ;Try again
-    ENOMEM equ          12 ;Out of memory
-    EACCES equ          13 ;Permission denied
-    EFAULT equ          14 ;Bad address
-    ENOTBLK equ         15 ;Block device required
-    EBUSY equ           16 ;Device or resource busy
-    EEXIST equ          17 ;File exists
-    EXDEV equ           18 ;Cross-device link
-    ENODEV equ          19 ;No such device
-    ENOTDIR equ         20 ;Not a directory
-    EISDIR equ          21 ;Is a directory
-    EINVAL equ          22 ;Invalid argument
-    ENFILE equ          23 ;File table overflow
-    EMFILE equ          24 ;Too many open files
-    ENOTTY equ          25 ;Not a typewriter
-    ETXTBSY equ         26 ;Text file busy
-    EFBIG equ           27 ;File too large
-    ENOSPC equ          28 ;No space left on device
-    ESPIPE equ          29 ;Illegal seek
-    EROFS equ           30 ;Read-only file system
-    EMLINK equ          31 ;Too many links
-    EPIPE equ           32 ;Broken pipe
-    EDOM equ            33 ;Math argument out of domain of func
-    ERANGE equ          34 ;Math result not representable
-    EDEADLK equ         35 ;Resource deadlock would occur
-    ENAMETOOLONG equ    36 ;File name too long
-    ENOLCK equ          37 ;No record locks available
-    ENOSYS equ          38 ;Function not implemented
-    ENOTEMPTY equ       39 ;Directory not empty
-    ELOOP equ           40 ;Too many symbolic links encountered
-    ENOMSG equ          42 ;No message of desired type
-    EIDRM equ           43 ;Identifier removed
-    ECHRNG equ          44 ;Channel number out of range
-    EL2NSYNC equ        45 ;Level 2 not synchronized
-    EL3HLT equ          46 ;Level 3 halted
-    EL3RST equ          47 ;Level 3 reset
-    ELNRNG equ          48 ;Link number out of range
-    EUNATCH equ         49 ;Protocol driver not attached
-    ENOCSI equ          50 ;No CSI structure available
-    EL2HLT equ          51 ;Level 2 halted
-    EBADE equ           52 ;Invalid exchange
-    EBADR equ           53 ;Invalid request descriptor
-    EXFULL equ          54 ;Exchange full
-    ENOANO equ          55 ;No anode
-    EBADRQC equ         56 ;Invalid request code
-    EBADSLT equ         57 ;Invalid slot
-    EBFONT equ          59 ;Bad font file format
-    ENOSTR equ          60 ;Device not a stream
-    ENODATA equ         61 ;No data available
-    ETIME equ           62 ;Timer expired
-    ENOSR equ           63 ;Out of streams resources
-    ENONET equ          64 ;Machine is not on the network
-    ENOPKG equ          65 ;Package not installed
-    EREMOTE equ         66 ;Object is remote
-    ENOLINK equ         67 ;Link has been severed
-    EADV equ            68 ;Advertise error
-    ESRMNT equ          69 ;Srmount error
-    ECOMM equ           70 ;Communication error on send
-    EPROTO equ          71 ;Protocol error
-    EMULTIHOP equ       72 ;Multihop attempted
-    EDOTDOT equ         73 ;RFS specific error
-    EBADMSG equ         74 ;Not a data message
-    EOVERFLOW equ       75 ;Value too large for defined data type
-    ENOTUNIQ equ        76 ;Name not unique on network
-    EBADFD equ          77 ;File descriptor in bad state
-    EREMCHG equ         78 ;Remote address changed
-    ELIBACC equ         79 ;Can not access a needed shared library
-    ELIBBAD equ         80 ;Accessing a corrupted shared library
-    ELIBSCN equ         81 ;.lib section in a.out corrupted
-    ELIBMAX equ         82 ;Attempting to link in too many shared libraries
-    ELIBEXEC equ        83 ;Cannot exec a shared library directly
-    EILSEQ equ          84 ;Illegal byte sequence
-    ERESTART equ        85 ;Interrupted system call should be restarted
-    ESTRPIPE equ        86 ;Streams pipe error
-    EUSERS equ          87 ;Too many users
-    ENOTSOCK equ        88 ;Socket operation on non-socket
-    EDESTADDRREQ equ    89 ;Destination address required
-    EMSGSIZE equ        90 ;Message too long
-    EPROTOTYPE equ      91 ;Protocol wrong type for socket
-    ENOPROTOOPT equ     92 ;Protocol not available
-    EPROTONOSUPPORT equ 93 ;Protocol not supported
-    ESOCKTNOSUPPORT equ 94 ;Socket type not supported
-    EOPNOTSUPP equ      95 ;Operation not supported on transport endpoint
-    EPFNOSUPPORT equ    96 ;Protocol family not supported
-    EAFNOSUPPORT equ    97 ;Address family not supported by protocol
-    EADDRINUSE equ      98 ;Address already in use
-    EADDRNOTAVAIL equ   99 ;Cannot assign requested address
-    ENETDOWN equ        100;Network is down
-    ENETUNREACH equ     101;Network is unreachable
-    ENETRESET equ       102;Network dropped connection because of reset
-    ECONNABORTED equ    103;Software caused connection abort
-    ECONNRESET equ      104;Connection reset by peer
-    ENOBUFS equ         105;No buffer space available
-    EISCONN equ         106;Transport endpoint is already connected
-    ENOTCONN equ        107;Transport endpoint is not connected
-    ESHUTDOWN equ       108;Cannot send after transport endpoint shutdown
-    ETOOMANYREFS equ    109;Too many references: cannot splice
-    ETIMEDOUT equ       110;Connection timed out
-    ECONNREFUSED equ    111;Connection refused
-    EHOSTDOWN equ       112;Host is down
-    EHOSTUNREACH equ    113;No route to host
-    EALREADY equ        114;Operation already in progress
-    EINPROGRESS equ     115;Operation now in progress
-    ESTALE equ          116;Stale NFS file handle
-    EUCLEAN equ         117;Structure needs cleaning
-    ENOTNAM equ         118;Not a XENIX named type file
-    ENAVAIL equ         119;No XENIX semaphores available
-    EISNAM equ          120;Is a named type file
-    EREMOTEIO equ       121;Remote I/O error
-    EDQUOT equ          122;Quota exceeded
-    ENOMEDIUM equ       123;No medium found
-    EMEDIUMTYPE equ     124;Wrong medium type
-    ECANCELED equ       125;Operation Canceled
-    ENOKEY equ          126;Required key not available
-    EKEYEXPIRED equ     127;Key has expired
-    EKEYREVOKED equ     128;Key has been revoked
-    EKEYREJECTED equ    129;Key was rejected by service
-    EOWNERDEAD equ      130;Owner died
-    ENOTRECOVERABLE equ 131;State not recoverable
-    .EPERM:           db "Operation not permitted", 0x0A ,0
-    .ENOENT:          db "No such file or directory", 0x0A ,0
-    .ESRCH:           db "No such process", 0x0A ,0
-    .EINTR:           db "Interrupted system call", 0x0A ,0
-    .EIO:             db "I/O error", 0x0A ,0
-    .ENXIO:           db "No such device or address", 0x0A ,0
-    .E2BIG:           db "Argument list too long", 0x0A ,0
-    .ENOEXEC:         db "Exec format error", 0x0A ,0
-    .EBADF:           db "Bad file number", 0x0A ,0
-    .ECHILD:          db "No child processes", 0x0A ,0
-    .EAGAIN:          db "Try again", 0x0A ,0
-    .ENOMEM:          db "Out of memory", 0x0A ,0
-    .EACCES:          db "Permission denied", 0x0A ,0
-    .EFAULT:          db "Bad address", 0x0A ,0
-    .ENOTBLK:         db "Block device required", 0x0A ,0
-    .EBUSY:           db "Device or resource busy", 0x0A ,0
-    .EEXIST:          db "File exists", 0x0A ,0
-    .EXDEV:           db "Cross-device link", 0x0A ,0
-    .ENODEV:          db "No such device", 0x0A ,0
-    .ENOTDIR:         db "Not a directory", 0x0A ,0
-    .EISDIR:          db "Is a directory", 0x0A ,0
-    .EINVAL:          db "Invalid argument", 0x0A ,0
-    .ENFILE:          db "File table overflow", 0x0A ,0
-    .EMFILE:          db "Too many open files", 0x0A ,0
-    .ENOTTY:          db "Not a typewriter", 0x0A ,0
-    .ETXTBSY:         db "Text file busy", 0x0A ,0
-    .EFBIG:           db "File too large", 0x0A ,0
-    .ENOSPC:          db "No space left on device", 0x0A ,0
-    .ESPIPE:          db "Illegal seek", 0x0A ,0
-    .EROFS:           db "Read-only file system", 0x0A ,0
-    .EMLINK:          db "Too many links", 0x0A ,0
-    .EPIPE:           db "Broken pipe", 0x0A ,0
-    .EDOM:            db "Math argument out of domain of func", 0x0A ,0
-    .ERANGE:          db "Math result not representable", 0x0A ,0
-    .EDEADLK:         db "Resource deadlock would occur", 0x0A ,0
-    .ENAMETOOLONG:    db "File name too long", 0x0A ,0
-    .ENOLCK:          db "No record locks available", 0x0A ,0
-    .ENOSYS:          db "Function not implemented", 0x0A ,0
-    .ENOTEMPTY:       db "Directory not empty", 0x0A ,0
-    .ELOOP:           db "Too many symbolic links encountered", 0x0A ,0
-    .ENOMSG:          db "No message of desired type", 0x0A ,0
-    .EIDRM:           db "Identifier removed", 0x0A ,0
-    .ECHRNG:          db "Channel number out of range", 0x0A ,0
-    .EL2NSYNC:        db "Level 2 not synchronized", 0x0A ,0
-    .EL3HLT:          db "Level 3 halted", 0x0A ,0
-    .EL3RST:          db "Level 3 reset", 0x0A ,0
-    .ELNRNG:          db "Link number out of range", 0x0A ,0
-    .EUNATCH:         db "Protocol driver not attached", 0x0A ,0
-    .ENOCSI:          db "No CSI structure available", 0x0A ,0
-    .EL2HLT:          db "Level 2 halted", 0x0A ,0
-    .EBADE:           db "Invalid exchange", 0x0A ,0
-    .EBADR:           db "Invalid request descriptor", 0x0A ,0
-    .EXFULL:          db "Exchange full", 0x0A ,0
-    .ENOANO:          db "No anode", 0x0A ,0
-    .EBADRQC:         db "Invalid request code", 0x0A ,0
-    .EBADSLT:         db "Invalid slot", 0x0A ,0
-    .EBFONT:          db "Bad font file format", 0x0A ,0
-    .ENOSTR:          db "Device not a stream", 0x0A ,0
-    .ENODATA:         db "No data available", 0x0A ,0
-    .ETIME:           db "Timer expired", 0x0A ,0
-    .ENOSR:           db "Out of streams resources", 0x0A ,0
-    .ENONET:          db "Machine is not on the network", 0x0A ,0
-    .ENOPKG:          db "Package not installed", 0x0A ,0
-    .EREMOTE:         db "Object is remote", 0x0A ,0
-    .ENOLINK:         db "Link has been severed", 0x0A ,0
-    .EADV:            db "Advertise error", 0x0A ,0
-    .ESRMNT:          db "Srmount error", 0x0A ,0
-    .ECOMM:           db "Communication error on send", 0x0A ,0
-    .EPROTO:          db "Protocol error", 0x0A ,0
-    .EMULTIHOP:       db "Multihop attempted", 0x0A ,0
-    .EDOTDOT:         db "RFS specific error", 0x0A ,0
-    .EBADMSG:         db "Not a data message", 0x0A ,0
-    .EOVERFLOW:       db "Value too large for defined data type", 0x0A ,0
-    .ENOTUNIQ:        db "Name not unique on network", 0x0A ,0
-    .EBADFD:          db "File descriptor in bad state", 0x0A ,0
-    .EREMCHG:         db "Remote address changed", 0x0A ,0
-    .ELIBACC:         db "Can not access a needed shared library", 0x0A ,0
-    .ELIBBAD:         db "Accessing a corrupted shared library", 0x0A ,0
-    .ELIBSCN:         db ".lib section in a.out corrupted", 0x0A ,0
-    .ELIBMAX:         db "Attempting to link in too many shared libraries", 0x0A ,0
-    .ELIBEXEC:        db "Cannot exec a shared library directly", 0x0A ,0
-    .EILSEQ:          db "Illegal byte sequence", 0x0A ,0
-    .ERESTART:        db "Interrupted system call should be restarted", 0x0A ,0
-    .ESTRPIPE:        db "Streams pipe error", 0x0A ,0
-    .EUSERS:          db "Too many users", 0x0A ,0
-    .ENOTSOCK:        db "Socket operation on non-socket", 0x0A ,0
-    .EDESTADDRREQ:    db "Destination address required", 0x0A ,0
-    .EMSGSIZE:        db "Message too long", 0x0A ,0
-    .EPROTOTYPE:      db "Protocol wrong type for socket", 0x0A ,0
-    .ENOPROTOOPT:     db "Protocol not available", 0x0A ,0
-    .EPROTONOSUPPORT: db "Protocol not supported", 0x0A ,0
-    .ESOCKTNOSUPPORT: db "Socket type not supported", 0x0A ,0
-    .EOPNOTSUPP:      db "Operation not supported on transport endpoint", 0x0A ,0
-    .EPFNOSUPPORT:    db "Protocol family not supported", 0x0A ,0
-    .EAFNOSUPPORT:    db "Address family not supported by protocol", 0x0A ,0
-    .EADDRINUSE:      db "Address already in use", 0x0A ,0
-    .EADDRNOTAVAIL:   db "Cannot assign requested address", 0x0A ,0
-    .ENETDOWN:        db "Network is down", 0x0A ,0
-    .ENETUNREACH:     db "Network is unreachable", 0x0A ,0
-    .ENETRESET:       db "Network dropped connection because of reset", 0x0A ,0
-    .ECONNABORTED:    db "Software caused connection abort", 0x0A ,0
-    .ECONNRESET:      db "Connection reset by peer", 0x0A ,0
-    .ENOBUFS:         db "No buffer space available", 0x0A ,0
-    .EISCONN:         db "Transport endpoint is already connected", 0x0A ,0
-    .ENOTCONN:        db "Transport endpoint is not connected", 0x0A ,0
-    .ESHUTDOWN:       db "Cannot send after transport endpoint shutdown", 0x0A ,0
-    .ETOOMANYREFS:    db "Too many references: cannot splice", 0x0A ,0
-    .ETIMEDOUT:       db "Connection timed out", 0x0A ,0
-    .ECONNREFUSED:    db "Connection refused", 0x0A ,0
-    .EHOSTDOWN:       db "Host is down", 0x0A ,0
-    .EHOSTUNREACH:    db "No route to host", 0x0A ,0
-    .EALREADY:        db "Operation already in progress", 0x0A ,0
-    .EINPROGRESS:     db "Operation now in progress", 0x0A ,0
-    .ESTALE:          db "Stale NFS file handle", 0x0A ,0
-    .EUCLEAN:         db "Structure needs cleaning", 0x0A ,0
-    .ENOTNAM:         db "Not a XENIX named type file", 0x0A ,0
-    .ENAVAIL:         db "No XENIX semaphores available", 0x0A ,0
-    .EISNAM:          db "Is a named type file", 0x0A ,0
-    .EREMOTEIO:       db "Remote I/O error", 0x0A ,0
-    .EDQUOT:          db "Quota exceeded", 0x0A ,0
-    .ENOMEDIUM:       db "No medium found", 0x0A ,0
-    .EMEDIUMTYPE:     db "Wrong medium type", 0x0A ,0
-    .ECANCELED:       db "Operation Canceled", 0x0A ,0
-    .ENOKEY:          db "Required key not available", 0x0A ,0
-    .EKEYEXPIRED:     db "Key has expired", 0x0A ,0
-    .EKEYREVOKED:     db "Key has been revoked", 0x0A ,0
-    .EKEYREJECTED:    db "Key was rejected by service", 0x0A ,0
-    .EOWNERDEAD:      db "Owner died", 0x0A ,0
-    .ENOTRECOVERABLE: db "State not recoverable", 0x0A ,0
-
-
-
 
 
 section .bss
