@@ -11,13 +11,10 @@ all: bootloader floppy_image Header
 #
 
 OS: $(SRC_DIR)/BOOTX64.asm
-	$(ASM) -f bin ./$(SRC_DIR)/BOOTX64.asm -o ./$(BUILD_DIR)/BOOTX64.o
+	$(ASM) -f elf64 ./$(SRC_DIR)/BOOTX64.asm -o ./$(BUILD_DIR)/BOOTX64.o
 
-File:	 $(SRC_DIR)/CreateFile.asm
-	$(ASM) -f elf64 ./$(SRC_DIR)/CreateFile.asm -o ./$(BUILD_DIR)/CreateFile.o
-
-CreateFile:	 $(SRC_DIR)/CreateFile.asm File
-	$(LINKER) ./$(BUILD_DIR)/CreateFile.o -o ./$(BUILD_DIR)/CreateFile
+File: $(SRC_DIR)/BOOTX64.asm OS
+	$(LINKER) ./$(BUILD_DIR)/BOOTX64.o -o ./$(BUILD_DIR)/BOOTX64.EFI -m i386pep --subsystem 10
 
 Converter:  $(SRC_DIR)/Converter.asm
 	$(ASM) -f elf64 ./$(SRC_DIR)/Converter.asm -o ./$(BUILD_DIR)/Converter.o

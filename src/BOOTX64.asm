@@ -1,11 +1,13 @@
 [bits 64]
 
+%include "src/boottypes.asm"
 
-.start:
+extern _start
 
+_start:
 
+    .begin:
 
-
-jmp .start
-.end:
+    jmp .begin 
+    .end:
 

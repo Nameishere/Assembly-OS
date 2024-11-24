@@ -1,4 +1,4 @@
 make clean
-make OS
+make File
 make Link
 ./bin/Converter
