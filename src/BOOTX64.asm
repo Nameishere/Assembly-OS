@@ -14,52 +14,102 @@ EFI_YELLOW equ 0x0E
 EFI_WHITE equ  0x0F
 
 
+EFI_TABLE_HEADER:
+    .Signature: equ 0
+    .Revision: equ  .Signature + uint64   
+    .HeaderSize: equ .Revision + uint32 
+    .CRC32: equ .HeaderSize + uint32
+    .Reserved: equ .CRC32 + uint32
+    .size: equ .Reserved + uint32
+
+EFI_SYSTEM_TABLE: 
+    .EFI_TABLE_HEADER: equ 0 
+    .FirmwareVendor: equ .EFI_TABLE_HEADER + EFI_TABLE_HEADER.size 
+    .FirmwareRevision: equ .FirmwareVendor + pointer 
+    .ConsoleInHandle: equ .FirmwareRevision + pointer  
+    .ConIn: equ .ConsoleInHandle + pointer 
+    .ConsoleOutHandle: equ .ConIn + pointer    
+    .ConOut: equ .ConsoleOutHandle + pointer 
+    .StandardErrorHandle: equ .ConOut + pointer 
+    .StdErr: equ .StandardErrorHandle + pointer 
+    .RuntimeServices: equ .StdErr + pointer 
+    .BootServices: equ .RuntimeServices + pointer 
+    .NumberOfTableEntries: equ .BootServices + pointer 
+    .ConfigurationTable: equ .NumberOfTableEntries + pointer  
+    .size: equ .ConfigurationTable + pointer 
+
+
+EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL:
+    .Reset: equ 0;
+    .OutputString: equ .Reset + pointer ;
+    .TestString: equ .OutputString + pointer ;
+    .QueryMode: equ .TestString + pointer ;
+    .SetMode: equ .QueryMode + pointer ;
+    .SetAttribute: equ .SetMode + pointer ;
+    .ClearScreen: equ .SetAttribute + pointer ;
+    .SetCursorPosition: equ .ClearScreen + pointer ;
+    .EnableCursor: equ .SetCursorPosition + pointer ;
+    .Mode: equ .EnableCursor + pointer
+    .Size: equ .Mode + pointer 
+
+uint64 equ 8
+pointer equ 8
+uint32 equ 4
+
+
 _start:
-    mov r9, [rdx]
-    add rdx, 64 ;void_pointer_size*4 + EFI_TABLE_HEADER_size + uint32_size 
-    mov rax, [rdx] 
-    mov r12, rax
-    add rax, 8*6
+
+    ;Set System Table pointer 
+    mov rbx, System_table
+    mov [rbx], rdx 
+
+    ;Get ConOut pointer 
+    add rdx, EFI_SYSTEM_TABLE.ConOut
+    mov rax, [rdx]
+
+    ;Get Set Clear Screen pointer
+    add rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.ClearScreen
     mov rbx, [rax]
-    ; mov r9, [r9]
-    mov rcx, r12 
+
+    ;Call Clear Screen 
+    mov rcx, [rdx] 
     call rbx 
 
-    mov rax, r12 
-    add rax, 8
+    ;Get System Table pointer 
+    mov rbx, System_table
+    mov rdx, [rbx] 
+
+    ;Get ConOut pointer 
+    add rdx, EFI_SYSTEM_TABLE.ConOut
+    mov rax, [rdx]
+
+    ;Get Set Output String pointer
+    add rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
     mov rbx, [rax]
 
+    ;Call Clear Screen 
+    mov rcx, [rdx] 
     mov rdx, .Text1
-    mov rcx, r12 
     call rbx 
     
-
-    ; mov rax, 2
-    ; mov rbx, .things2
-    ; mov [rbx], rax
+    
     .begin:
     jmp .begin
 
-    .Text1: dw H,E,L,L,O,0x20,W,O,R,L,D,0
-
+    .Text1: dw H,E,L,L,O,0x0020,W,O,R,L,D,0
 
 
 
 section .data
-thing: dq 
+
 
 
 
 
 section .bss
 
-EFI_TABLE_HEADER:
-    .Signature: resq 1;
-    .Revision: resd 1;
-    .HeaderSize: resd 1;
-    .CRC32: resd 1;
-    .Reserved: resd 1;
-    
+System_table resq 1 
+
 
 A equ 0x0041
 B equ 0x0042
