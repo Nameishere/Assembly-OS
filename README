@@ -1,9 +1,2 @@
-Goal: make a opperating system using nasm 
-
-
-OS image consitsts of parts: 
-MBR 
-GPT 
-FAT file system 
-
-OS itself is in the FAT file system 
+To Do List: 
+1. Do something with each of the functions in the EFI_SYSTEM_TABLE and print all the data 
