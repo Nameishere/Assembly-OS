@@ -65,13 +65,36 @@ _start:
     mov rcx, [rax] 
     call rbx 
 
-    ;Print Hello World
+    mov rax, FirmwareVendor
+    call print_String
+
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
     mov rbx, [rax]
     mov rax, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [rax] 
-    mov rdx, .Text1
+    mov rax, EFI_SYSTEM_TABLE.FirmwareVendor
+    mov rdx, [rax]
     call rbx 
+
+    call next_line
+
+    mov rax, FirmwareRevision
+    call print_String
+
+    mov rbx, EFI_SYSTEM_TABLE.FirmwareRevision
+    mov rax, [rbx]
+    mov rcx, 0
+    call print_Number
+
+    call next_line
+
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.EnableCursor
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    mov rdx, 1
+    call rbx 
+
 
     ;Reset Input Device 
     mov rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.Reset
@@ -110,7 +133,6 @@ _start:
     .end:
     jmp .end
     
-    .Text1: dw H,E,L,L,O,0x0020,W,O,R,L,D,0
 
 
 
@@ -138,6 +160,7 @@ Table_setup:
     Call mov_table
 
 
+
 mov_table:
     ;rdx is source
     ;rbx is the destination  
@@ -160,12 +183,198 @@ mov_table:
     pop rdx 
     ret 
 
+print_String: 
+    ;This function prints a asci string as a unicode string (format of firmwae input)
+    ;rax is input string  
+    push rax
+    push rbx
+    push rcx
+    push rdx
+
+    mov r10, 1 ;loop Count initiliased 
+    .loop1_start:
+        mov bl, [rax]
+        cmp bl, 0
+        je .loop1_end
+
+        inc rax 
+        inc r10
+        jmp .loop1_start
+    .loop1_end:
+
+    mov r12, r10 
+    mov rbx, 0 
+    .loop2_start:
+        cmp r10, 0
+        je .loop2_end
+
+        dec rsp 
+        mov bl, 0 
+        mov [rsp], bl
+
+        dec rsp 
+        mov bl, [rax]
+        mov [rsp], bl
+
+        dec r10 
+        dec rax 
+        jmp .loop2_start
+    .loop2_end:
+
+    ;Print 
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    mov rdx, rsp
+    call rbx 
+
+    mov rax, 2
+    mul r12
+    mov r12, rax 
+    add rsp, r12
+
+
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    ret
+
+
+print_Number: 
+    ;This function prints a asci string as a unicode string (format of firmwae input)
+    ;rax is input number
+    ;rcx is optional digits input ie if 0 doesn't use 
+
+
+    ; call exception ;FEA6808
+    ; push rbx 
+
+    dec rsp
+    dec rsp 
+
+    mov rdx, 0 
+    mov [rsp], dx
+
+    ; mov rcx, 10
+    mov r12, 0 ;loop Count initiliased 
+    .loop2_start:
+        cmp rcx, 0 
+        je .if1_end
+        
+        cmp rcx, r12
+        jl .if2_end
+
+        jmp .if3_end
+        .if1_end:
+
+        cmp rax, 0
+        jne .if3_end
+        .if2_end:
+
+        jmp .loop2_end
+        .if3_end:
+
+
+        dec rsp 
+        mov bl, 0 
+        mov [rsp], bl
+
+        
+
+        ; call print_test
+
+        push rcx 
+        mov rdx, 0 
+        mov rcx, 10
+        div rcx
+        pop rcx 
+
+        dec rsp 
+        add rdx, 0x30
+        mov bl, dl
+        mov [rsp], bl
+
+
+
+
+        inc r12 
+        jmp .loop2_start
+    .loop2_end:
+
+    ;Print 
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    mov rdx, rsp
+    call rbx 
+
+    mov rax, 2
+    mul r12
+    mov r12, rax 
+    add rsp, r12
+    add rsp, 2
+
+    ; pop rbx 
+    ; call exception
+    ret ;FEA686E ;FEA6800 ;FEA67F8
+
+
+print_test:
+    push rax 
+    push rbx 
+    push rcx 
+    push rdx 
+    push r10 
+    push r8
+    push r9
+    push r11
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    mov rdx, Test
+    call rbx 
+
+    pop r11
+    pop r9
+    pop r8
+    pop r10 
+    pop rdx 
+    pop rcx 
+    pop rbx 
+    pop rax 
+    ret 
+
+
+next_line:
+
+
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rdx, [rcx]
+    add rdx, 16
+    mov r8d, [rdx]
+    add r8, 1
+    ; call exception
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetCursorPosition
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax]
+    mov rdx, 0
+    call rbx 
+    ret 
 
 section .data
 
 read_character: dw 0, 0, 0
 
+FirmwareVendor: db "System Firmware Vendor: ",0
 
+FirmwareRevision: db "System Firmware Revision: ", 0
+
+Test: dw"T", 0
 
 section .bss
 
@@ -214,30 +423,3 @@ EFI_SIMPLE_TEXT_INPUT_PROTOCOL:
     .size: equ $ - EFI_SIMPLE_TEXT_INPUT_PROTOCOL
 
 
-
-A equ 0x0041
-B equ 0x0042
-C equ 0x0043
-D equ 0x0044
-E equ 0x0045
-F equ 0x0046
-G equ 0x0047
-H equ 0x0048
-I equ 0x0049
-J equ 0x004A
-K equ 0x004B
-L equ 0x004C
-M equ 0x004D
-N equ 0x004E
-O equ 0x004F
-P equ 0x0050
-Q equ 0x0051
-R equ 0x0052
-S equ 0x0053
-T equ 0x0054
-U equ 0x0055
-V equ 0x0056
-W equ 0x0057
-X equ 0x0058
-Y equ 0x0059
-Z equ 0x005A
