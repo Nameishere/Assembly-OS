@@ -14,51 +14,6 @@ EFI_YELLOW equ 0x0E
 EFI_WHITE equ  0x0F
 
 
-EFI_TABLE_HEADER:
-    .Signature: equ 0
-    .Revision: equ  .Signature + uint64   
-    .HeaderSize: equ .Revision + uint32 
-    .CRC32: equ .HeaderSize + uint32
-    .Reserved: equ .CRC32 + uint32
-    .size: equ .Reserved + uint32
-
-EFI_SYSTEM_TABLE: 
-    .EFI_TABLE_HEADER: equ 0 
-    .FirmwareVendor: equ .EFI_TABLE_HEADER + EFI_TABLE_HEADER.size 
-    .FirmwareRevision: equ .FirmwareVendor + pointer 
-    .ConsoleInHandle: equ .FirmwareRevision + pointer  
-    .ConIn: equ .ConsoleInHandle + pointer 
-    .ConsoleOutHandle: equ .ConIn + pointer    
-    .ConOut: equ .ConsoleOutHandle + pointer 
-    .StandardErrorHandle: equ .ConOut + pointer 
-    .StdErr: equ .StandardErrorHandle + pointer 
-    .RuntimeServices: equ .StdErr + pointer 
-    .BootServices: equ .RuntimeServices + pointer 
-    .NumberOfTableEntries: equ .BootServices + pointer 
-    .ConfigurationTable: equ .NumberOfTableEntries + pointer  
-    .size: equ .ConfigurationTable + pointer 
-
-
-EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL:
-    .Reset: equ 0;
-    .OutputString: equ .Reset + pointer ;
-    .TestString: equ .OutputString + pointer ;
-    .QueryMode: equ .TestString + pointer ;
-    .SetMode: equ .QueryMode + pointer ;
-    .SetAttribute: equ .SetMode + pointer ;
-    .ClearScreen: equ .SetAttribute + pointer ;
-    .SetCursorPosition: equ .ClearScreen + pointer ;
-    .EnableCursor: equ .SetCursorPosition + pointer ;
-    .Mode: equ .EnableCursor + pointer
-    .Size: equ .Mode + pointer 
-
-
-EFI_SIMPLE_TEXT_INPUT_PROTOCOL:
-    .Reset: equ 0
-    .ReadKeyStroke: equ .Reset + pointer  
-    .WaitForKey: equ .ReadKeyStroke + pointer
-    .size: equ .WaitForKey + pointer
-
 uint64 equ 8
 pointer equ 8
 uint32 equ 4
@@ -102,106 +57,59 @@ EFI_HTTP_ERROR equ 35 ;A HTTP error occurred during the network operation.
 
 _start:
 
-    ;Set System Table pointer 
-    mov rbx, System_table
-    mov [rbx], rdx 
-
-    ;Get ConOut pointer 
-    add rdx, EFI_SYSTEM_TABLE.ConOut
-    mov rax, [rdx]
-
-    ;Get Set Clear Screen pointer
-    add rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.ClearScreen
+    call Table_setup
+    ;Clear Screen
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.ClearScreen
     mov rbx, [rax]
-
-    ;Call Clear Screen 
-    mov rcx, [rdx] 
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
     call rbx 
 
-    ;Get System Table pointer 
-    mov rbx, System_table
-    mov rdx, [rbx] 
-
-    ;Get ConOut pointer 
-    add rdx, EFI_SYSTEM_TABLE.ConOut
-    mov rax, [rdx]
-
-    ;Get Set Output String pointer
-    add rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
+    ;Print Hello World
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
     mov rbx, [rax]
-
-    ;Call Output String 
-    mov rcx, [rdx] 
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
     mov rdx, .Text1
     call rbx 
 
-    
-
-    ;Get System Table pointer 
-    mov rbx, System_table
-    mov rdx, [rbx] 
-
-    ;Get ConIn pointer 
-    add rdx, EFI_SYSTEM_TABLE.ConIn
-    mov rax, [rdx]
-
-    ;Get Read Key Stroke pointer
-    add rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.Reset
+    ;Reset Input Device 
+    mov rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.Reset
     mov rbx, [rax]
-
-    ;Call Read Key Stroke 
-    mov rcx, [rdx] 
+    mov rax, EFI_SYSTEM_TABLE.ConIn
+    mov rcx, [rax] 
     mov rdx, 0
-    mov rax, 0
     call rbx 
 
     .GetInput:
 
-    ;Get System Table pointer 
-    mov rbx, System_table
-    mov rdx, [rbx] 
-
-    ;Get ConIn pointer 
-    add rdx, EFI_SYSTEM_TABLE.ConIn
-    mov rax, [rdx]
-
-    ;Get Read Key Stroke pointer
-    add rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.ReadKeyStroke 
+    ;Reset Input Device 
+    mov rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.ReadKeyStroke
     mov rbx, [rax]
-
-    ;Call Read Key Stroke 
-    mov rcx, [rdx] 
-    mov rdx, 0x01
-    mov rax, 0
+    mov rax, EFI_SYSTEM_TABLE.ConIn
+    mov rcx, [rax] 
+    mov rdx, read_character
     call rbx 
 
-
     cmp rax, EFI_SUCCESS
-    ; inc r14
     jne .GetInput
 
-    ;Get System Table pointer 
-    mov rbx, System_table
-    mov rdx, [rbx] 
 
-    ;Get ConOut pointer 
-    add rdx, EFI_SYSTEM_TABLE.ConOut
-    mov rax, [rdx]
-
-    ;Get Set Output String pointer
-    add rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
+    ;Print Hello World
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
     mov rbx, [rax]
-
-    ;Call Output String 
-    mov rcx, [rdx] 
-    mov r14, read_character
-    add r14, 2
-    mov rdx, r14
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    mov rdx, read_character
+    add rdx, 2
     call rbx 
 
     jmp .GetInput
 
 
+    .end:
+    jmp .end
+    
     .Text1: dw H,E,L,L,O,0x0020,W,O,R,L,D,0
 
 
@@ -211,17 +119,100 @@ exception:
     div rcx
 
 
+Table_setup:
+    ; rdx is the system table pointer 
+    mov rbx, EFI_SYSTEM_TABLE
+    mov rcx, EFI_SYSTEM_TABLE.size
+    Call mov_table
+
+    mov rbx, EFI_SYSTEM_TABLE.ConOut
+    mov rdx, [rbx]
+    mov rbx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.size
+    Call mov_table
+
+    mov rbx, EFI_SYSTEM_TABLE.ConIn
+    mov rdx, [rbx]
+    mov rbx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL
+    mov rcx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.size
+    Call mov_table
+
+
+mov_table:
+    ;rdx is source
+    ;rbx is the destination  
+    ;rcx is the source
+    push rdx 
+    mov rax, 0
+    .loop1_start:
+    cmp rax, rcx
+    jg .loop1_end
+
+    mov r10b, [rdx]
+    mov [rbx], r10b 
+    
+    inc rax 
+    inc rdx
+    inc rbx 
+    jmp .loop1_start
+    .loop1_end:
+
+    pop rdx 
+    ret 
+
+
 section .data
 
 read_character: dw 0, 0, 0
 
 
 
-
 section .bss
-    
 
-System_table resq 1 
+
+
+EFI_SYSTEM_TABLE:
+    ;EFI Table Header 
+    .Signature: resb uint64
+    .Revision: resb uint32
+    .HeaderSize: resb uint32 
+    .CRC32: resb uint32
+    .Reserved: resb uint32
+    ;End of EFI Table Header
+    .FirmwareVendor: resb 8 
+    .FirmwareRevision: resb 8  
+    .ConsoleInHandle: resb 8   
+    .ConIn: resb 8  
+    .ConsoleOutHandle: resb 8     
+    .ConOut: resb 8  
+    .StandardErrorHandle: resb 8  
+    .StdErr: resb 8  
+    .RuntimeServices: resb 8  
+    .BootServices: resb 8  
+    .NumberOfTableEntries: resb 8  
+    .ConfigurationTable: resb 8   
+    .size: equ $ - EFI_SYSTEM_TABLE
+
+EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL:
+    .Reset: resb pointer
+    .OutputString: resb pointer ;
+    .TestString: resb pointer ;
+    .QueryMode: resb pointer ;
+    .SetMode: resb pointer ;
+    .SetAttribute: resb pointer ;
+    .ClearScreen: resb pointer ;
+    .SetCursorPosition: resb pointer ;
+    .EnableCursor: resb pointer ;
+    .Mode: resb pointer
+    .size: equ $ - EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL 
+
+
+EFI_SIMPLE_TEXT_INPUT_PROTOCOL:
+    .Reset: resb pointer 
+    .ReadKeyStroke: resb pointer   
+    .WaitForKey: resb pointer 
+    .size: equ $ - EFI_SIMPLE_TEXT_INPUT_PROTOCOL
+
 
 
 A equ 0x0041
