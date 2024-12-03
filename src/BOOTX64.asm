@@ -57,7 +57,11 @@ EFI_HTTP_ERROR equ 35 ;A HTTP error occurred during the network operation.
 
 _start:
 
+    mov rbx, imageHandle
+    mov [rbx], rcx
+
     call Table_setup
+
     ;Clear Screen
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.ClearScreen
     mov rbx, [rax]
@@ -65,16 +69,58 @@ _start:
     mov rcx, [rax] 
     call rbx 
 
+
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetAttribute
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax]
+    mov rdx, 0x02
+    call rbx 
+
+
+
+    mov rax, 0
+    call Change_Mode
+
+
+
+    mov rax, SystemTableRevision
+    call print_String
+
+    mov rbx, EFI_SYSTEM_TABLE.Revision
+    mov rax, 0
+    mov eax, [rbx]
+    mov r12, rax 
+    shr rax, 16
+    mov rcx, 0
+    call print_Number
+
+    call print_dot
+
+    and r12, 0x0000000000FFFF
+    mov rax, r12
+    mov rcx, 10
+    div rcx 
+    mov r12, rdx
+    mov rcx, 0 
+    call print_Number
+
+    call print_dot
+
+
+    mov rax, r12
+    mov rcx, 0 
+    call print_Number
+
+    call next_line
+
     mov rax, FirmwareVendor
     call print_String
 
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
-    mov rbx, [rax]
-    mov rax, EFI_SYSTEM_TABLE.ConOut
-    mov rcx, [rax] 
-    mov rax, EFI_SYSTEM_TABLE.FirmwareVendor
-    mov rdx, [rax]
-    call rbx 
+
+    mov rdx, EFI_SYSTEM_TABLE.FirmwareVendor
+    mov rax, [rdx]
+    call print_unicode 
 
     call next_line
 
@@ -83,8 +129,49 @@ _start:
 
     mov rbx, EFI_SYSTEM_TABLE.FirmwareRevision
     mov rax, [rbx]
+    mov r12, rax 
+    shr rax, 16
     mov rcx, 0
     call print_Number
+
+    call print_dot
+
+    and r12, 0x0000000000FFFF
+    mov rax, r12
+    mov rcx, 0 
+    call print_Number
+
+    call next_line
+
+    mov rax, BootServicesRevision
+    call print_String
+
+
+    mov rbx, EFI_SYSTEM_TABLE.Revision
+    mov rax, 0
+    mov eax, [rbx]
+    mov r12, rax 
+    shr rax, 16
+    mov rcx, 0
+    call print_Number
+
+    call print_dot
+
+    and r12, 0x0000000000FFFF
+    mov rax, r12
+    mov rcx, 10
+    div rcx 
+    mov r12, rdx
+    mov rcx, 0 
+    call print_Number
+
+    call print_dot
+
+
+    mov rax, r12
+    mov rcx, 0 
+    call print_Number
+
 
     call next_line
 
@@ -117,21 +204,35 @@ _start:
     cmp rax, EFI_SUCCESS
     jne .GetInput
 
-
-    ;Print Hello World
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
     mov rbx, [rax]
     mov rax, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [rax] 
     mov rdx, read_character
+
+    mov ax, [rdx]
+    cmp ax, 0x17
+    je .exit
+
     add rdx, 2
+    je .exit
     call rbx 
 
     jmp .GetInput
 
 
-    .end:
-    jmp .end
+    .exit:
+
+    mov rax, EFI_RUNTIME_SERVICES.ResetSystem
+    mov rbx, [rax]
+    mov rcx, EFI_RESET_TYPE.EfiResetShutdown
+    mov rdx, 0
+    mov r8, 0
+
+    call rbx
+
+
+
     
 
 
@@ -159,6 +260,21 @@ Table_setup:
     mov rcx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.size
     Call mov_table
 
+    mov rbx, EFI_SYSTEM_TABLE.BootServices
+    mov rdx, [rbx]
+    mov rbx, EFI_BOOT_SERVICES
+    mov rcx, EFI_BOOT_SERVICES.size
+    Call mov_table
+
+    mov rbx, EFI_SYSTEM_TABLE.RuntimeServices
+    mov rdx, [rbx]
+    mov rbx, EFI_RUNTIME_SERVICES
+    mov rcx, EFI_RUNTIME_SERVICES.size
+    Call mov_table
+
+    ret
+
+
 
 
 mov_table:
@@ -182,6 +298,37 @@ mov_table:
 
     pop rdx 
     ret 
+
+print_unicode:
+    ;rax is pointer to string 
+
+    call test_string
+
+    mov rdx, rax
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    call rbx 
+    ret 
+
+
+test_string:
+    ;rax is pointer to string 
+    push rax
+
+    mov rdx, rax
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.TestString
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    call rbx 
+
+
+    pop rax 
+    ret
+
+
 
 print_String: 
     ;This function prints a asci string as a unicode string (format of firmwae input)
@@ -249,7 +396,8 @@ print_Number:
 
 
     ; call exception ;FEA6808
-    ; push rbx 
+    push rbx 
+    push r12
 
     dec rsp
     dec rsp 
@@ -271,6 +419,20 @@ print_Number:
 
         cmp rax, 0
         jne .if3_end
+        
+        
+        cmp r12, 0 
+        jne .if2_end
+        ; call exception
+
+        inc r12
+        dec rsp
+        dec rsp 
+
+        mov rdx, 0x0030 
+        mov [rsp], dx
+
+        ; call print_dot
         .if2_end:
 
         jmp .loop2_end
@@ -317,12 +479,13 @@ print_Number:
     add rsp, r12
     add rsp, 2
 
-    ; pop rbx 
+    pop r12
+    pop rbx 
     ; call exception
     ret ;FEA686E ;FEA6800 ;FEA67F8
 
 
-print_test:
+print_dot:
     push rax 
     push rbx 
     push rcx 
@@ -335,7 +498,7 @@ print_test:
     mov rbx, [rax]
     mov rax, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [rax] 
-    mov rdx, Test
+    mov rdx, .dot
     call rbx 
 
     pop r11
@@ -347,11 +510,54 @@ print_test:
     pop rbx 
     pop rax 
     ret 
+    .dot: dw ".",0
+
+Change_Mode: 
+    ;rax is the mode to change to 
+
+    mov rdx, rax 
+    push rdx 
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.QueryMode
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax]
+    call rbx 
+    pop rdx
+
+    ; call exception
+    cmp rax, EFI_SUCCESS
+    jne .if1
+
+    mov rdx ,rax 
+
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetMode
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax]
+    call rbx 
+
+    jmp .if1_end
+    .if1:
+    call next_line
+
+
+    mov rax, .Message
+    call print_String
+
+    call next_line
+
+    .if1_end:
+
+
+    ret 
+
+
+
+    .Message: db "Mode Does not Exist", 0
+
 
 
 next_line:
-
-
     mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
     mov rdx, [rcx]
     add rdx, 16
@@ -374,10 +580,21 @@ FirmwareVendor: db "System Firmware Vendor: ",0
 
 FirmwareRevision: db "System Firmware Revision: ", 0
 
-Test: dw"T", 0
+SystemTableRevision: db "System Table Revision: ", 0
+
+BootServicesRevision: db "Boot Services Table Revision: ", 0
+
+
 
 section .bss
 
+imageHandle: resq 1
+
+EFI_RESET_TYPE:
+    .EfiResetCold: equ 0
+    .EfiResetWarm: equ 1
+    .EfiResetShutdown: equ 2
+    .EfiResetPlatformSpecific: equ 3
 
 
 EFI_SYSTEM_TABLE:
@@ -423,3 +640,130 @@ EFI_SIMPLE_TEXT_INPUT_PROTOCOL:
     .size: equ $ - EFI_SIMPLE_TEXT_INPUT_PROTOCOL
 
 
+EFI_BOOT_SERVICES:
+    ;EFI Table Header 
+    .Signature: resb uint64
+    .Revision: resb uint32
+    .HeaderSize: resb uint32 
+    .CRC32: resb uint32
+    .Reserved: resb uint32
+    ;End of EFI Table Header
+    ;
+    ; Task Priority Services
+    ;
+    .RaiseTPL: resq 1; EFI 1.0+
+    .RestoreTPL: resq 1; EFI 1.0+
+    ;
+    ; Memory Services
+    ;
+    .AllocatePages: resq 1; EFI 1.0+
+    .FreePages: resq 1; EFI 1.0+
+    .GetMemoryMap: resq 1; EFI 1.0+
+    .AllocatePool: resq 1; EFI 1.0+
+    .FreePool: resq 1; EFI 1.0+
+    ;
+    ; Event & Timer Services
+    ;
+    .CreateEvent: resq 1; EFI 1.0+
+    .SetTimer: resq 1; EFI 1.0+
+    .WaitForEvent: resq 1; EFI 1.0+
+    .SignalEvent: resq 1; EFI 1.0+
+    .CloseEvent: resq 1; EFI 1.0+
+    .CheckEvent: resq 1; EFI 1.0+
+    ;
+    ; Protocol Handler Services
+    ;
+    .InstallProtocolInterface: resq 1; EFI 1.0+
+    .ReinstallProtocolInterface: resq 1; EFI 1.0+
+    .UninstallProtocolInterface: resq 1; EFI 1.0+
+    .HandleProtocol: resq 1; EFI 1.0+
+    .Reserved2: resq 1; EFI 1.0+
+    .RegisterProtocolNotify: resq 1; EFI 1.0+
+    .LocateHandle: resq 1; EFI 1.0+
+    .LocateDevicePath: resq 1; EFI 1.0+
+    .InstallConfigurationTable: resq 1; EFI 1.0+
+    ;
+    ; Image Services
+    ;
+    .LoadImage: resq 1; EFI 1.0+
+    .StartImage: resq 1; EFI 1.0+
+    .Exit: resq 1; EFI 1.0+
+    .UnloadImage: resq 1; EFI 1.0+
+    .ExitBootServices: resq 1; EFI 1.0+
+    ;
+    ; Miscellaneous Services
+    ;
+    .GetNextMonotonicCount: resq 1; EFI 1.0+
+    .Stall: resq 1; EFI 1.0+
+    .SetWatchdogTimer: resq 1; EFI 1.0+
+    ;
+    ; DriverSupport Services
+    ;
+    .ConnectController: resq 1; EFI 1.1
+    .DisconnectController: resq 1; EFI 1.1+
+    ;
+    ; Open and Close Protocol Services
+    ;
+    .OpenProtocol: resq 1; EFI 1.1+
+    .CloseProtocol: resq 1; EFI 1.1+
+    .OpenProtocolInformation: resq 1; EFI 1.1+
+    ;
+    ; Library Services
+    ;
+    .ProtocolsPerHandle: resq 1; EFI 1.1+
+    .LocateHandleBuffer: resq 1; EFI 1.1+
+    .LocateProtocol: resq 1; EFI 1.1+
+    .InstallMultipleProtocolInterfaces: resq 1; ;EFI 1.1+
+    .UninstallMultipleProtocolInterfaces: resq 1; EFI 1.1+*
+    ;
+    ; 32-bit CRC Services
+    ;
+    .CalculateCrc32: resq 1; ; EFI 1.1+
+    ;
+    ; Miscellaneous Services
+    ;
+    .CopyMem: resq 1; EFI 1.1+
+    .SetMem: resq 1; EFI 1.1+
+    .CreateEventEx: resq 1; UEFI 2.0+
+    .size: equ $ - EFI_BOOT_SERVICES
+
+
+EFI_RUNTIME_SERVICES:
+    .Signature: resb uint64
+    .Revision: resb uint32
+    .HeaderSize: resb uint32 
+    .CRC32: resb uint32
+    .Reserved: resb uint32
+    ;
+    ; Time Services
+    ;
+    .GetTime: resq 1
+    .SetTime: resq 1
+    .GetWakeupTime: resq 1
+    .SetWakeupTime: resq 1
+    ;
+    ; Virtual Memory Services
+    ;
+    .SetVirtualAddressMap: resq 1
+    .ConvertPointer: resq 1
+    ;
+    ; Variable Services
+    ;
+    .GetVariable: resq 1
+    .GetNextVariableName: resq 1
+    .SetVariable: resq 1
+    ;
+    ; Miscellaneous Services
+    ;
+    .GetNextHighMonotonicCount: resq 1
+    .ResetSystem: resq 1
+    ;
+    ; UEFI 2.0 Capsule Services
+    ;
+    .UpdateCapsule: resq 1
+    .QueryCapsuleCapabilities: resq 1
+    ;
+    ; Miscellaneous UEFI 2.0 Service
+    ;
+    .QueryVariableInfo: resq 1
+    .size: equ $ - EFI_RUNTIME_SERVICES
