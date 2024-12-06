@@ -1,10 +1,10 @@
 [bits 64]
 
-%include "src/timelib.asm"
-%include "src/errorlib.asm"
-%include "src/strlib.asm"
-%include "src/stdlib.asm"
-%include "src/conslib.asm"
+%include "src/Image_Generator/timelib.asm"
+%include "src/Image_Generator/errorlib.asm"
+%include "src/Image_Generator/strlib.asm"
+%include "src/Image_Generator/stdlib.asm"
+%include "src/Image_Generator/conslib.asm"
 
 section .text
 global _start          ;must be declared for linker (ld)
