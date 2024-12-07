@@ -2,3 +2,4 @@ test.hdd
 
 *.bin
 *.o
+*.EFI

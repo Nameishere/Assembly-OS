@@ -227,3 +227,23 @@ EFI_RUNTIME_SERVICES:
     ;
     .QueryVariableInfo: resq 1
     .size: equ $ - EFI_RUNTIME_SERVICES
+
+EFI_TIME:;
+    .Year: resw 1; // 1900 - 9999
+    .Month: resb 1; // 1 - 12
+    .Day: resb 1; // 1 - 31
+    .Hour: resb 1; // 0 - 23
+    .Minute: resb 1; // 0 - 59
+    .Second: resb 1; // 0 - 59
+    .Pad1: resb 1;
+    .Nanosecond: resd 1 ; // 0 - 999,999,999
+    .TimeZone: resw 1 ; // —1440 to 1440 or 2047
+    .Daylight: resb 1;
+    .Pad2: resb 1;
+
+resq 10
+EFI_TIME_CAPABILITIES:
+    .Resolution: resd 1
+    .Accuracy: resd 1
+    .SetsToZero: resb 1
+resq 10

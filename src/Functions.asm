@@ -136,7 +136,7 @@ print_Number:
         je .if1_end
         
         cmp rcx, r12
-        jl .if2_end
+        jle .if2_end
 
         jmp .if3_end
         .if1_end:
@@ -238,48 +238,25 @@ print_dot:
 
 Change_Mode: 
     ;rax is the mode to change to 
-
     mov rdx, rax 
-    push rdx 
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.QueryMode
-    mov rbx, [rax]
-    mov rax, EFI_SYSTEM_TABLE.ConOut
-    mov rcx, [rax]
-    call rbx 
-    pop rdx
-
-    ; call exception
-    cmp rax, EFI_SUCCESS
-    jne .if1
-
-    mov rdx ,rax 
-
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetMode
     mov rbx, [rax]
     mov rax, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [rax]
     call rbx 
+    ret
 
-    jmp .if1_end
-    .if1:
-    call next_line
-
-
-    mov rax, .Message
-    call print_String
-
-    call next_line
-
-    .if1_end:
-
-
+QueryMode:
+    ;rax is the mode input 
+    ;rcx is the colun output 
+    ;rdx is the row output
+    mov rdx, rax
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.QueryMode
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax]
+    call rbx 
     ret 
-
-
-
-    .Message: db "Mode Does not Exist", 0
-
-
 
 next_line:
     mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
@@ -287,11 +264,57 @@ next_line:
     add rdx, 16
     mov r8d, [rdx]
     add r8, 1
-    ; call exception
+
+    mov rdx, 0 
+    call SetCursorPosition
+
+    ret 
+
+SetCursorPosition:
+    ;rdx is the row
+    ;r8 is the column 
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetCursorPosition
     mov rbx, [rax]
     mov rax, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [rax]
-    mov rdx, 0
     call rbx 
-    ret 
+    ret
+
+Clear_Screen:
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.ClearScreen
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    call rbx 
+    ret
+
+SetTextColor:
+    mov rdx, rax
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetAttribute
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax]
+    call rbx 
+    ret
+
+EnableCursor:
+    mov r8, 0
+    mov r9, 0
+    mov rdx, rax
+    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.EnableCursor
+    mov rbx, [rax]
+    mov rax, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [rax] 
+    ; call exception
+    call rbx 
+    ret
+
+GetTime:
+    mov rax, EFI_RUNTIME_SERVICES.GetTime
+    mov rbx, [rax]
+    mov rcx, EFI_TIME
+    mov rdx, EFI_TIME_CAPABILITIES
+    call rbx 
+
+
+    ret
