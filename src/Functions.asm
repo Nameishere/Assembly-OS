@@ -318,3 +318,26 @@ GetTime:
 
 
     ret
+
+CreateEvent:
+    ;rax is the returned Event
+    ;rcx is Type 
+    ;rdx is Task Priority 
+    ; r8  is notification Function
+    ; r9 is notify context
+
+    mov rax, EFI_BOOT_SERVICES.CreateEvent
+    mov rbx, [rax]
+    call rbx 
+    ret
+
+
+SetTimer:
+    ;rcx is the Event
+    ;rdx is the Type 
+    ; r8 is the Trigger time 
+
+    mov rax, EFI_BOOT_SERVICES.SetTimer
+    mov rbx, [rax]
+    call rbx 
+    ret

@@ -241,9 +241,36 @@ EFI_TIME:;
     .Daylight: resb 1;
     .Pad2: resb 1;
 
-resq 10
+EFI_EVENT_NOTIFY:
+    .Event: resq 1
+    .Context: resq 1 
+
+
+
+EFI_EVENT: resq 1 
+ 
+EVT_TIMER equ  0x80000000
+EVT_RUNTIME equ  0x40000000
+EVT_NOTIFY_WAIT equ  0x00000100
+EVT_NOTIFY_SIGNAL equ  0x00000200
+EVT_SIGNAL_EXIT_BOOT_SERVICES equ  0x00000201
+EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE equ  0x60000202
+
+
 EFI_TIME_CAPABILITIES:
     .Resolution: resd 1
     .Accuracy: resd 1
     .SetsToZero: resb 1
-resq 10
+
+
+TPL_APPLICATION equ  4
+TPL_CALLBACK equ  8
+TPL_NOTIFY equ  16
+TPL_HIGH_LEVEL equ  31
+
+TimerCancel equ 0
+TimerPeriodic equ 1
+TimerRelative equ 2
+ 
+ 
+

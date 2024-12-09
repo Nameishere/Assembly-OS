@@ -2,74 +2,54 @@
 
 %include "src/boottypes.asm"
 %include "src/Functions.asm"
+%include "src/DisplayPage.asm"
+%include "src/MenuPage.asm"
 
 section .text
 global _start
 
 _start:
 
+    
     mov rbx, imageHandle
     mov [rbx], rcx
 
     call Table_setup
 
-    
-
     mov rax, 0x02
     call SetTextColor
 
-    mov rax, 0
-    call Change_Mode
+    sub rsp, 32
+    mov rcx, EVT_TIMER | EVT_NOTIFY_SIGNAL
+    mov rdx, TPL_CALLBACK
+    mov r8, DisplayTime
+    mov r9, 0
+    mov rax, EFI_EVENT
+    mov [rsp + 0x20], rax
+    mov rax, EFI_BOOT_SERVICES.CreateEvent
+    mov rbx, [rax]
+    call rbx 
+    add rsp, 32
+
+    cmp rax, EFI_SUCCESS
+    jne exception
+
+
+    mov rax, EFI_EVENT
+    mov rcx, [rax]
+
+    mov rdx, TimerPeriodic
+    mov r8, 10000000
+    call SetTimer
+    cmp rax, EFI_SUCCESS
+    jne exception
+
+    ; call exception
 
     call DisplayFirmwareInfo
 
-    mov rax, 1
-    call EnableCursor
-
-    ;Reset Input Device 
-    mov rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.Reset
-    mov rbx, [rax]
-    mov rax, EFI_SYSTEM_TABLE.ConIn
-    mov rcx, [rax] 
-    mov rdx, 0
-    call rbx 
-
     .GetInput:
-
-    ;Reset Input Device 
-    mov rax, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.ReadKeyStroke
-    mov rbx, [rax]
-    mov rax, EFI_SYSTEM_TABLE.ConIn
-    mov rcx, [rax] 
-    mov rdx, read_character
-    call rbx 
-
-    cmp rax, EFI_SUCCESS
-    jne .GetInput
-
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
-    mov rbx, [rax]
-    mov rax, EFI_SYSTEM_TABLE.ConOut
-    mov rcx, [rax] 
-    mov rdx, read_character
-
-    mov ax, [rdx]
-    cmp ax, 0x17
-    je .exit
-
-    add rdx, 2
-    je .exit
-    call rbx 
-
     jmp .GetInput
-
-    .exit:
-    mov rax, EFI_RUNTIME_SERVICES.ResetSystem
-    mov rbx, [rax]
-    mov rcx, EFI_RESET_TYPE.EfiResetShutdown
-    mov rdx, 0
-    mov r8, 0
-    call rbx
 
 exception:
     mov r12, 0
@@ -106,81 +86,6 @@ Table_setup:
     Call mov_data
 
     ret
-
-
-DisplayFirmwareInfo: 
-    call Clear_Screen
-
-    ;Display Page Title: 
-    mov rax, .PageTitle
-    call print_String
-    call next_line
-    call next_line
-
-    ;Firmware Section Title
-    mov rax, .FirmwareInfo
-    call print_String
-    call next_line
-
-    ;Display Firmware Vendor
-    mov rax, .FirmwareVendor
-    call print_String
-    mov rdx, EFI_SYSTEM_TABLE.FirmwareVendor
-    mov rax, [rdx]
-    call print_unicode 
-    call next_line
-
-    ;Display Firmware Revision
-    mov rax, .FirmwareRevision
-    call print_String
-    mov rbx, EFI_SYSTEM_TABLE.FirmwareRevision
-    call DisplayFirmwareRevision
-    call next_line
-
-    call next_line
-
-    ;Table Section Title
-    mov rax, .TableInfo
-    call print_String
-    call next_line
-
-    ;Display System Table Revision
-    mov rax, .SystemTableRevision
-    call print_String
-    mov rbx, EFI_SYSTEM_TABLE.Revision ;pointer to number 
-    call DisplayRevision
-    call next_line
-
-    ;Display Boot Services Table Revision
-    mov rax, .BootServicesRevision
-    call print_String
-    mov rbx, EFI_BOOT_SERVICES.Revision
-    call DisplayRevision
-    call next_line
-
-    ;Display RunTime Services Table Revision
-    mov rax, .RunTimeServicesRevision
-    call print_String
-    mov rbx, EFI_RUNTIME_SERVICES.Revision
-    call DisplayRevision
-    call next_line
-
-
-    call DisplayTime
-
-    call DisplayEsc
-
-    ret
-
-    .PageTitle: db "        General Info Page", 0
-    .FirmwareInfo: db "Firmware Info:", 0
-    .TableInfo: db "Table Revisions:", 0
-    .FirmwareVendor: db "System Firmware Vendor: ",0
-    .FirmwareRevision: db "System Firmware Revision: ", 0
-    .SystemTableRevision: db "System Table Revision: ", 0
-    .BootServicesRevision: db "Boot Services Table Revision: ", 0
-    .RunTimeServicesRevision: db "RunTime Services Table Revision: ", 0
-
 
 DisplayEsc:
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
@@ -219,6 +124,14 @@ DisplayEsc:
     .Message: db "[Press Esc to Exit]", 0
 
 DisplayTime:
+    push rbx
+    push rbp 
+    push rdi 
+    push rsi
+    push r12
+    push r13
+    push r14
+    push r15
 
     mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
     mov rbx, [rax]
@@ -236,13 +149,11 @@ DisplayTime:
     mov rax, [rdx]
     call QueryMode
     
-    
     mov r8, rdx
     dec r8
 
     mov rdx, rcx
     sub rdx, 20
-
 
     call SetCursorPosition
 
@@ -256,6 +167,24 @@ DisplayTime:
     pop rax
     mov rdx, rax
     call SetCursorPosition
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi 
+    pop rbp 
+    pop rbx
+
+
+    mov rcx, 0 
+    mov rdx, 0
+    mov r8, 0
+    mov r9, 0
+    mov r10, 0
+    mov r11, 0 
+    mov rax, 0
     
     ret
 
@@ -315,54 +244,11 @@ Print_Time:
     .Colon: db ":",0
     .Slash: db "/",0
 
-DisplayRevision:
-    ;rbx is number input
-    mov rax, 0
-    mov eax, [rbx]
-    mov r12, rax 
-    shr rax, 16
-    mov rcx, 0
-    call print_Number
-
-    call print_dot
-
-    and r12, 0x0000000000FFFF
-    mov rax, r12
-    mov rcx, 10
-    div rcx 
-    mov r12, rdx
-    mov rcx, 0 
-    call print_Number
-
-    call print_dot
-
-    mov rax, r12
-    mov rcx, 0 
-    call print_Number
-
-    ret
-
-DisplayFirmwareRevision:
-    mov rax, [rbx]
-    mov r12, rax 
-    shr rax, 16
-    mov rcx, 0
-    call print_Number
-
-    call print_dot
-
-    and r12, 0x0000000000FFFF
-    mov rax, r12
-    mov rcx, 0 
-    call print_Number
-
-    ret
-
-
 section .data
 
 read_character: dw 0, 0, 0
 SelectedMode: dq 0
+TimeEvent: dq 0
 
 section .bss
 
