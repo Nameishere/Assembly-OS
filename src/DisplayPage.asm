@@ -1,5 +1,6 @@
 DisplayFirmwareInfo: 
     call Clear_Screen
+    
 
     ;Display Page Title: 
     mov rax, .PageTitle
@@ -55,10 +56,11 @@ DisplayFirmwareInfo:
     call DisplayRevision
     call next_line
 
+    call DisplayEsc
 
     call DisplayTime
 
-    call DisplayEsc
+    call DisplaycheckKey
 
     ret
 
@@ -71,6 +73,30 @@ DisplayFirmwareInfo:
     .BootServicesRevision: db "Boot Services Table Revision: ", 0
     .RunTimeServicesRevision: db "RunTime Services Table Revision: ", 0
 
+
+DisplaycheckKey:
+
+    .Start:
+    mov rcx, 1
+    mov rdx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.WaitForKey
+
+    call WaitForEvent
+    cmp rax, EFI_SUCCESS
+    jne exception
+    
+    call ReadKeyStroke
+    mov rdx, EFI_INPUT_KEY.ScanCode
+    mov rcx, [rdx]
+    
+    cmp rcx, 0x17 ;Escape key 
+    je ResetSystem
+
+    cmp rcx, 0x05 ;Home Key 
+    je DisplayMenu 
+
+    jmp .Start
+
+    ret
 
 DisplayRevision:
     ;rbx is number input

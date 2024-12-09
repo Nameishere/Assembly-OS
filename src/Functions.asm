@@ -341,3 +341,32 @@ SetTimer:
     mov rbx, [rax]
     call rbx 
     ret
+
+
+WaitForEvent:
+    ;rcx is the number of Events 
+    ;rdx is the event 
+    mov r8, EFI_BOOT_SERVICES.WaitForEvent
+    mov rbx, [r8]
+    mov r8, index
+    call rbx 
+    ret
+
+
+ReadKeyStroke:
+    mov rdx, EFI_SYSTEM_TABLE.ConIn
+    mov rcx, [rdx]
+    mov rdx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.ReadKeyStroke
+    mov rbx, [rdx]
+    mov rdx, EFI_INPUT_KEY
+    call rbx 
+    ret
+
+ResetSystem:
+    mov r8, EFI_RUNTIME_SERVICES.ResetSystem
+    mov rbx, [r8]
+    mov rcx, 2
+    mov rdx, EFI_SUCCESS
+    mov r8, 0
+    call rbx 
+    ret

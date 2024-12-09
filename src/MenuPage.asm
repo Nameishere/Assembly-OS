@@ -34,7 +34,6 @@ DisplayMenu:
 
     call SetTextColor   
 
-
     .Swith1:
 
     ;Text Color Selection
@@ -42,9 +41,14 @@ DisplayMenu:
     call print_String
     call next_line
 
-
     call DisplayEsc
     call DisplayTime
+
+    call DisplayTime
+
+    call MenucheckKey
+
+
 
     ret 
     .PageTitle: db "        Menu", 0
@@ -52,6 +56,29 @@ DisplayMenu:
     .TextSelection: db "Text Selection", 0
     .ModeSelection: db "Mode Selection", 0
 
-section .bss
+
+MenucheckKey:
+
+    .Start:
+    mov rcx, 1
+    mov rdx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.WaitForKey
+
+    call WaitForEvent
+    cmp rax, EFI_SUCCESS
+    jne exception
+    
+    call ReadKeyStroke
+    mov rdx, EFI_INPUT_KEY.ScanCode
+    mov rcx, [rdx]
+    
+    cmp rcx, 0x17
+    je ResetSystem
+
+    jmp .Start
+
+    ret
+
+
+section .data
 
 SelectedPage: dq 0

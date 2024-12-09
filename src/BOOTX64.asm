@@ -34,7 +34,6 @@ _start:
     cmp rax, EFI_SUCCESS
     jne exception
 
-
     mov rax, EFI_EVENT
     mov rcx, [rax]
 
@@ -44,11 +43,11 @@ _start:
     cmp rax, EFI_SUCCESS
     jne exception
 
-    ; call exception
 
     call DisplayFirmwareInfo
 
     .GetInput:
+    ; call DisplayFirmwareInfo
     jmp .GetInput
 
 exception:
@@ -121,9 +120,16 @@ DisplayEsc:
     call SetCursorPosition
 
     ret
-    .Message: db "[Press Esc to Exit]", 0
+    .Message: db "[Esc = Reset, Home = Menu]", 0
 
 DisplayTime:
+    
+    push rcx 
+    push rdx
+    push r8
+    push r9
+    push r10
+    push r11 
     push rbx
     push rbp 
     push rdi 
@@ -176,14 +182,13 @@ DisplayTime:
     pop rdi 
     pop rbp 
     pop rbx
+    pop r11 
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    pop rcx 
 
-
-    mov rcx, 0 
-    mov rdx, 0
-    mov r8, 0
-    mov r9, 0
-    mov r10, 0
-    mov r11, 0 
     mov rax, 0
     
     ret

@@ -272,5 +272,10 @@ TimerCancel equ 0
 TimerPeriodic equ 1
 TimerRelative equ 2
  
+
+ EFI_INPUT_KEY:
+    .ScanCode: resw 1
+    .unicodeChar: resw 1
  
 
+index: resq 1
