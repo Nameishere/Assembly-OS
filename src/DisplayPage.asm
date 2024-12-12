@@ -1,58 +1,57 @@
 DisplayFirmwareInfo: 
     call Clear_Screen
     
-
     ;Display Page Title: 
-    mov rax, .PageTitle
+    mov rcx, .PageTitle
     call print_String
     call next_line
     call next_line
 
     ;Firmware Section Title
-    mov rax, .FirmwareInfo
+    mov rcx, .FirmwareInfo
     call print_String
     call next_line
 
     ;Display Firmware Vendor
-    mov rax, .FirmwareVendor
+    mov rcx, .FirmwareVendor
     call print_String
     mov rdx, EFI_SYSTEM_TABLE.FirmwareVendor
-    mov rax, [rdx]
+    mov rcx, [rdx]
     call print_unicode 
     call next_line
 
     ;Display Firmware Revision
-    mov rax, .FirmwareRevision
+    mov rcx, .FirmwareRevision
     call print_String
-    mov rbx, EFI_SYSTEM_TABLE.FirmwareRevision
+    mov rcx, EFI_SYSTEM_TABLE.FirmwareRevision
     call DisplayFirmwareRevision
     call next_line
 
     call next_line
 
     ;Table Section Title
-    mov rax, .TableInfo
+    mov rcx, .TableInfo
     call print_String
     call next_line
 
     ;Display System Table Revision
-    mov rax, .SystemTableRevision
+    mov rcx, .SystemTableRevision
     call print_String
-    mov rbx, EFI_SYSTEM_TABLE.Revision ;pointer to number 
+    mov rcx, EFI_SYSTEM_TABLE.Revision ;pointer to number 
     call DisplayRevision
     call next_line
 
     ;Display Boot Services Table Revision
-    mov rax, .BootServicesRevision
+    mov rcx, .BootServicesRevision
     call print_String
-    mov rbx, EFI_BOOT_SERVICES.Revision
+    mov rcx, EFI_BOOT_SERVICES.Revision
     call DisplayRevision
     call next_line
 
     ;Display RunTime Services Table Revision
-    mov rax, .RunTimeServicesRevision
+    mov rcx, .RunTimeServicesRevision
     call print_String
-    mov rbx, EFI_RUNTIME_SERVICES.Revision
+    mov rcx, EFI_RUNTIME_SERVICES.Revision
     call DisplayRevision
     call next_line
 
@@ -60,7 +59,10 @@ DisplayFirmwareInfo:
 
     call DisplayTime
 
-    call DisplaycheckKey
+    jmp DisplaycheckKey
+
+    .loop:
+    jmp .loop 
 
     ret
 
@@ -73,7 +75,6 @@ DisplayFirmwareInfo:
     .BootServicesRevision: db "Boot Services Table Revision: ", 0
     .RunTimeServicesRevision: db "RunTime Services Table Revision: ", 0
 
-
 DisplaycheckKey:
 
     .Start:
@@ -81,12 +82,11 @@ DisplaycheckKey:
     mov rdx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.WaitForKey
 
     call WaitForEvent
-    cmp rax, EFI_SUCCESS
-    jne exception
     
     call ReadKeyStroke
+    mov rcx, 0
     mov rdx, EFI_INPUT_KEY.ScanCode
-    mov rcx, [rdx]
+    mov cx, [rdx]
     
     cmp rcx, 0x17 ;Escape key 
     je ResetSystem
@@ -96,47 +96,55 @@ DisplaycheckKey:
 
     jmp .Start
 
-    ret
 
 DisplayRevision:
-    ;rbx is number input
-    mov rax, 0
-    mov eax, [rbx]
-    mov r12, rax 
-    shr rax, 16
-    mov rcx, 0
+    ;rcx is pointer to number input
+    mov r8, 0
+    mov r8d, [rcx]
+    mov r12, r8 
+    shr r8, 16
+
+    mov rcx, r8
+    mov rdx, 0
+    push r12
     call print_Number
 
     call print_dot
 
+    pop r12
     and r12, 0x0000000000FFFF
     mov rax, r12
     mov rcx, 10
     div rcx 
+    mov rcx, rax
     mov r12, rdx
-    mov rcx, 0 
+    mov rdx, 0 
+    push r12
     call print_Number
 
     call print_dot
 
-    mov rax, r12
-    mov rcx, 0 
+    pop r12
+    mov rcx, r12
+    mov rdx, 0 
     call print_Number
 
     ret
 
 DisplayFirmwareRevision:
-    mov rax, [rbx]
-    mov r12, rax 
-    shr rax, 16
-    mov rcx, 0
+    mov r11, [rcx]
+    mov rcx, r11 
+    shr rcx, 16
+    mov rdx, 0
+    push r11
     call print_Number
-
+    
     call print_dot
 
-    and r12, 0x0000000000FFFF
-    mov rax, r12
-    mov rcx, 0 
+    pop r11
+    mov rcx, r11
+    and rcx, 0x0000000000FFFF
+    mov rdx, 0 
     call print_Number
 
     ret

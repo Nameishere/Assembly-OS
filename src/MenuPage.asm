@@ -3,58 +3,39 @@ DisplayMenu:
     call Clear_Screen
 
     ;Display Page Title: 
-    mov rax, .PageTitle
+    mov rcx, .PageTitle
     call print_String
     call next_line
     call next_line
-
-
-    mov rax, SelectedPage
-    mov rbx, [rax]
-    cmp rbx, 0
-    jne .Swith1
-
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rax]
-    add rbx, 8 
-
-    mov rax, [rbx]
-
-    push rax 
-    add rax, 0x20
-
-    call SetTextColor
 
     ;Firmware Section Title
-    mov rax, .FirmwareInfo
+    mov rcx, .FirmwareInfo
     call print_String
     call next_line
-
-    pop rax
-
-    call SetTextColor   
-
-    .Swith1:
 
     ;Text Color Selection
-    mov rax, .TextSelection
+    mov rcx, .TextSelection
     call print_String
     call next_line
 
+    ;Highlight the Selection
+    ; call HighlightSelection
+
+    ; Display time and how to esc
     call DisplayEsc
     call DisplayTime
 
-    call DisplayTime
+    ;Wait for Key to be pressed
+    jmp MenucheckKey
 
-    call MenucheckKey
-
-
-
-    ret 
+    .PrintList:
     .PageTitle: db "        Menu", 0
-    .FirmwareInfo: db "Info Page", 0
-    .TextSelection: db "Text Selection", 0
-    .ModeSelection: db "Mode Selection", 0
+    .FirmwareInfo: db   "Info Page          ", 0
+    .TextSelection: db  "Text Selection     ", 0
+    .ModeSelection: db  "Mode Selection     ", 0
+
+HighlightSelection:
+    
 
 
 MenucheckKey:
@@ -64,21 +45,46 @@ MenucheckKey:
     mov rdx, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.WaitForKey
 
     call WaitForEvent
-    cmp rax, EFI_SUCCESS
-    jne exception
     
     call ReadKeyStroke
+    mov rcx, 0
     mov rdx, EFI_INPUT_KEY.ScanCode
-    mov rcx, [rdx]
-    
+    mov cx, [rdx]
+
+    mov rbx, .Start
+
     cmp rcx, 0x17
     je ResetSystem
 
+    cmp rcx, 0x03
+    ; je increaseSelection
+
+    cmp rcx, 0x02
+    ; je decreaseSelection
+
+    mov rcx, 0
+    mov rdx, EFI_INPUT_KEY.unicodeChar
+    mov cx, [rdx]
+    
+
+    cmp rcx, 0x0D
+    je ChangePage
+
     jmp .Start
 
-    ret
 
+ChangePage:
+    mov rcx, SelectedPage 
+    mov rdx, [rcx]
+    cmp rdx, 0 
+    je DisplayFirmwareInfo
+
+    jmp MenucheckKey
 
 section .data
 
-SelectedPage: dq 0
+
+
+SelectedPage: dq 1
+
+PageCount equ 2

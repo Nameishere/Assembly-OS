@@ -10,49 +10,40 @@ global _start
 
 _start:
 
-    
     mov rbx, imageHandle
     mov [rbx], rcx
 
     call Table_setup
 
-    mov rax, 0x02
+    mov rdx, 0x02
     call SetTextColor
 
-    sub rsp, 32
+    mov r12, EFI_EVENT
+
     mov rcx, EVT_TIMER | EVT_NOTIFY_SIGNAL
     mov rdx, TPL_CALLBACK
     mov r8, DisplayTime
     mov r9, 0
-    mov rax, EFI_EVENT
-    mov [rsp + 0x20], rax
-    mov rax, EFI_BOOT_SERVICES.CreateEvent
-    mov rbx, [rax]
-    call rbx 
-    add rsp, 32
+    mov [rsp - 0x10], r12
+    .TestAddress:
+    call CreateEvent ;Create Event = 000000000E2DA34B
 
-    cmp rax, EFI_SUCCESS
-    jne exception
 
-    mov rax, EFI_EVENT
-    mov rcx, [rax]
+    mov rdx, EFI_EVENT
 
+    mov rcx, [rdx]
     mov rdx, TimerPeriodic
     mov r8, 10000000
     call SetTimer
-    cmp rax, EFI_SUCCESS
-    jne exception
-
 
     call DisplayFirmwareInfo
 
     .GetInput:
-    ; call DisplayFirmwareInfo
     jmp .GetInput
 
 exception:
-    mov r12, 0
-    div r12
+    mov r13, 0
+    div r13
 
 Table_setup:
     ; rdx is the system table pointer 
@@ -87,43 +78,41 @@ Table_setup:
     ret
 
 DisplayEsc:
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rax]
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rbx, [rcx]
 
     add rbx, 12
-    mov rax, 0
-    mov eax, [rbx]
-    push rax
+    mov rdx, 0
+    mov edx, [rbx]
+    push rdx 
     add rbx, 4
-    mov rax, 0
-    mov eax, [rbx]
-    push rax 
+    mov rcx, 0
+    mov ecx, [rbx]
+    push rcx 
 
     mov rdx, SelectedMode
-    mov rax, [rdx]
+    mov rcx, [rdx]
+    mov rdx, Column
+    mov r8, Row
     call QueryMode
 
-    mov r8, rdx
-    dec r8
+    dec rdx
 
-    mov rdx, 0
+    mov rcx, 0
     call SetCursorPosition
 
-    mov rax, .Message
+    mov rcx, .Message
     call print_String
 
-
-    pop rax
-    mov r8, rax
-    pop rax
-    mov rdx, rax
+    pop rcx
+    pop rdx
     call SetCursorPosition
 
     ret
     .Message: db "[Esc = Reset, Home = Menu]", 0
 
 DisplayTime:
-    
+
     push rcx 
     push rdx
     push r8
@@ -139,28 +128,27 @@ DisplayTime:
     push r14
     push r15
 
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rax]
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rbx, [rcx]
 
     add rbx, 12
-    mov rax, 0
-    mov eax, [rbx]
-    push rax
+    mov rdx, 0
+    mov edx, [rbx]
+    push rdx
     add rbx, 4
-    mov rax, 0
-    mov eax, [rbx]
-    push rax 
+    mov rcx, 0
+    mov ecx, [rbx]
+    push rcx 
 
-    mov rdx, SelectedMode
-    mov rax, [rdx]
+    mov r11, SelectedMode
+    mov rcx, [r11]
+    mov rdx, Column
+    mov r8, Row
     call QueryMode
     
-    mov r8, rdx
-    dec r8
-
-    mov rdx, rcx
-    sub rdx, 20
-
+    dec rdx
+    sub rcx, 20
+    
     call SetCursorPosition
 
     call GetTime
@@ -168,10 +156,8 @@ DisplayTime:
     call Print_Time
 
     ;return to old position 
-    pop rax
-    mov r8, rax
-    pop rax
-    mov rdx, rax
+    pop rcx
+    pop rdx
     call SetCursorPosition
 
     pop r15
@@ -194,55 +180,55 @@ DisplayTime:
     ret
 
 Print_Time:
-    mov rax, 0
+    mov rcx, 0
     mov rbx, EFI_TIME.Year
-    mov ax, [rbx]
-    mov rcx, 4
+    mov cx, [rbx]
+    mov rdx, 4
     call print_Number
 
-    mov rax, .Slash
+    mov rcx, .Slash
     call print_String
 
-    mov rax, 0
+    mov rcx, 0
     mov rbx, EFI_TIME.Month
-    mov al, [rbx]
-    mov rcx, 2
+    mov cl, [rbx]
+    mov rdx, 2
     call print_Number
 
-    mov rax, .Slash
+    mov rcx, .Slash
     call print_String
 
-    mov rax, 0
+    mov rcx, 0
     mov rbx, EFI_TIME.Day
-    mov al, [rbx]
-    mov rcx, 2
+    mov cl, [rbx]
+    mov rdx, 2
     call print_Number
 
-    mov rax, .Colon
+    mov rcx, .Colon
     call print_String
 
-    mov rax, 0
+    mov rcx, 0
     mov rbx, EFI_TIME.Hour
-    mov al, [rbx]
-    mov rcx, 2
+    mov cl, [rbx]
+    mov rdx, 2
     call print_Number
 
-    mov rax, .Colon
+    mov rcx, .Colon
     call print_String
 
-    mov rax, 0
+    mov rcx, 0
     mov rbx, EFI_TIME.Minute
-    mov al, [rbx]
-    mov rcx, 2
+    mov cl, [rbx]
+    mov rdx, 2
     call print_Number
 
-    mov rax, .Colon
+    mov rcx, .Colon
     call print_String
     
-    mov rax, 0
+    mov rcx, 0
     mov rbx, EFI_TIME.Second
-    mov al, [rbx]
-    mov rcx, 2
+    mov cl, [rbx]
+    mov rdx, 2
     call print_Number
 
     ret 
@@ -254,6 +240,9 @@ section .data
 read_character: dw 0, 0, 0
 SelectedMode: dq 0
 TimeEvent: dq 0
+
+Column: dq 0
+Row: dq 0
 
 section .bss
 
