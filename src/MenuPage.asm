@@ -19,7 +19,7 @@ DisplayMenu:
     call next_line
 
     ;Highlight the Selection
-    ; call HighlightSelection
+    call HighlightSelection
 
     ; Display time and how to esc
     call DisplayEsc
@@ -30,13 +30,126 @@ DisplayMenu:
 
     .PrintList:
     .PageTitle: db "        Menu", 0
-    .FirmwareInfo: db   "Info Page          ", 0
-    .TextSelection: db  "Text Selection     ", 0
-    .ModeSelection: db  "Mode Selection     ", 0
+    .FirmwareInfo: db   "Info Page", 0
+    .TextSelection: db  "Text Selection", 0
+    .ModeSelection: db  "Mode Selection", 0
+    .titles: dq .FirmwareInfo:, .TextSelection:, .ModeSelection:
 
 HighlightSelection:
-    
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rbx, [rcx]
 
+    add rbx, 12
+    mov rdx, 0
+    mov edx, [rbx]
+    push rdx
+    add rbx, 4
+    mov rcx, 0
+    mov ecx, [rbx]
+    push rcx 
+
+    mov rcx, 0
+    mov rbx, SelectedPage
+    mov rdx, [rbx]
+    push rdx
+    add rdx, 2
+    call SetCursorPosition
+
+    mov rcx, 0x32
+    call SetTextColor
+
+    pop rdx
+    mov rcx, DisplayMenu.titles
+    mov rax, 8
+    mul rdx 
+    mov rdx, rax
+    add rcx, rdx
+    mov rcx, [rcx]
+    call print_String
+
+    mov rcx, 0x02
+    call SetTextColor
+
+    pop rcx
+    pop rdx
+    call SetCursorPosition
+
+    ret
+
+unHighlightSelection:
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rbx, [rcx]
+
+    add rbx, 12
+    mov rdx, 0
+    mov edx, [rbx]
+    push rdx
+    add rbx, 4
+    mov rcx, 0
+    mov ecx, [rbx]
+    push rcx 
+
+    mov rcx, 0
+    mov rbx, SelectedPage
+    mov rdx, [rbx]
+    push rdx
+    add rdx, 2
+    call SetCursorPosition
+
+    pop rdx
+    mov rcx, DisplayMenu.titles
+    mov rax, 8
+    mul rdx 
+    mov rdx, rax
+    add rcx, rdx
+    mov rcx, [rcx]
+    call print_String
+
+    pop rcx
+    pop rdx
+    call SetCursorPosition
+
+    ret
+
+
+increaseSelection:
+    mov rbx, SelectedPage
+    mov rcx, [rbx]
+
+    cmp rcx, PageCount - 1 
+    je MenucheckKey
+    push rbx
+    push rcx
+    call unHighlightSelection
+    pop rcx
+    pop rbx
+
+    inc rcx
+    mov [rbx], rcx
+
+    call HighlightSelection
+
+    jmp MenucheckKey
+
+decreaseSelection:
+    mov rbx, SelectedPage
+    mov rcx, [rbx]
+
+    cmp rcx, 0
+    je MenucheckKey
+
+    push rbx
+    push rcx
+    call unHighlightSelection
+    pop rcx
+    pop rbx
+
+    dec rcx
+    mov [rbx], rcx
+
+    call HighlightSelection
+
+    jmp MenucheckKey
 
 MenucheckKey:
 
@@ -53,14 +166,14 @@ MenucheckKey:
 
     mov rbx, .Start
 
-    cmp rcx, 0x17
+    cmp rcx, 0x17 ;Esc 
     je ResetSystem
 
-    cmp rcx, 0x03
-    ; je increaseSelection
+    cmp cx, 0x02 ;down arrow 
+     je increaseSelection
 
-    cmp rcx, 0x02
-    ; je decreaseSelection
+    cmp cx, 0x01 ;up arrow 
+    je decreaseSelection
 
     mov rcx, 0
     mov rdx, EFI_INPUT_KEY.unicodeChar
@@ -69,6 +182,8 @@ MenucheckKey:
 
     cmp rcx, 0x0D
     je ChangePage
+
+    
 
     jmp .Start
 

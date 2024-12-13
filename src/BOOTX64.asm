@@ -15,7 +15,7 @@ _start:
 
     call Table_setup
 
-    mov rdx, 0x02
+    mov rcx, 0x02
     call SetTextColor
 
     mov r12, EFI_EVENT

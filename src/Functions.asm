@@ -266,7 +266,8 @@ Clear_Screen:
     ret
 
 SetTextColor:
-    ;rdx is the color
+    ;rcx is the color
+    mov rdx, rcx
     push rdx
     mov rdx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetAttribute
     mov rbx, [rdx]
