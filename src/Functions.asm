@@ -353,3 +353,15 @@ CreateEvent:
     add rsp, 0x28
 
     ret
+
+ResetDevice:
+    ;rcx is wheather to useextended verification
+    
+    mov rdx, rcx
+    mov r11, EFI_SIMPLE_TEXT_INPUT_PROTOCOL.Reset
+    mov rbx, [r11]
+    mov r11, EFI_SYSTEM_TABLE.ConIn
+    mov rcx, [r11]
+    call rbx
+    ret
+    

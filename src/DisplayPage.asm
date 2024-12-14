@@ -56,13 +56,9 @@ DisplayFirmwareInfo:
     call next_line
 
     call DisplayEsc
-
     call DisplayTime
 
     jmp DisplaycheckKey
-
-    .loop:
-    jmp .loop 
 
     ret
 

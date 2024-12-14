@@ -4,42 +4,45 @@
 %include "src/Functions.asm"
 %include "src/DisplayPage.asm"
 %include "src/MenuPage.asm"
+%include "src/TextSelectionPage.asm"
 
 section .text
 global _start
 
 _start:
 
+    ;Store imageHandle
     mov rbx, imageHandle
     mov [rbx], rcx
 
+    ;Setup System Tables
     call Table_setup
 
-    mov rcx, 0x02
-    call SetTextColor
+    ;Reset Input Device
+    mov rcx, 0
+    call ResetDevice
 
+    ;SetColor
+    call SetColors
+
+    ;Create Timer Event
     mov r12, EFI_EVENT
-
     mov rcx, EVT_TIMER | EVT_NOTIFY_SIGNAL
     mov rdx, TPL_CALLBACK
     mov r8, DisplayTime
     mov r9, 0
     mov [rsp - 0x10], r12
-    .TestAddress:
     call CreateEvent ;Create Event = 000000000E2DA34B
 
-
+    ; Add Timer Event to Timer 
     mov rdx, EFI_EVENT
-
     mov rcx, [rdx]
     mov rdx, TimerPeriodic
-    mov r8, 10000000
+    mov r8, 10000000 ; 1 second timer  
     call SetTimer
 
-    call DisplayFirmwareInfo
-
-    .GetInput:
-    jmp .GetInput
+    ;Display Initial Page
+    jmp DisplayMenu
 
 exception:
     mov r13, 0
@@ -74,6 +77,13 @@ Table_setup:
     mov rbx, EFI_RUNTIME_SERVICES
     mov rcx, EFI_RUNTIME_SERVICES.size
     Call mov_data
+
+    mov rbx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rdx, [rbx]
+    mov rbx, SIMPLE_TEXT_OUTPUT_MODE
+    mov rcx, SIMPLE_TEXT_OUTPUT_MODE.size
+    Call mov_data
+
 
     ret
 

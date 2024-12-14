@@ -1,4 +1,3 @@
-
 DisplayMenu:
     call Clear_Screen
 
@@ -28,12 +27,11 @@ DisplayMenu:
     ;Wait for Key to be pressed
     jmp MenucheckKey
 
-    .PrintList:
     .PageTitle: db "        Menu", 0
     .FirmwareInfo: db   "Info Page", 0
     .TextSelection: db  "Text Selection", 0
     .ModeSelection: db  "Mode Selection", 0
-    .titles: dq .FirmwareInfo:, .TextSelection:, .ModeSelection:
+    .titles: dq .FirmwareInfo, .TextSelection, .ModeSelection
 
 HighlightSelection:
     mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
@@ -55,8 +53,7 @@ HighlightSelection:
     add rdx, 2
     call SetCursorPosition
 
-    mov rcx, 0x32
-    call SetTextColor
+    call SetHighlight
 
     pop rdx
     mov rcx, DisplayMenu.titles
@@ -67,8 +64,7 @@ HighlightSelection:
     mov rcx, [rcx]
     call print_String
 
-    mov rcx, 0x02
-    call SetTextColor
+    Call SetColors
 
     pop rcx
     pop rdx
@@ -110,7 +106,6 @@ unHighlightSelection:
     call SetCursorPosition
 
     ret
-
 
 increaseSelection:
     mov rbx, SelectedPage
@@ -179,11 +174,8 @@ MenucheckKey:
     mov rdx, EFI_INPUT_KEY.unicodeChar
     mov cx, [rdx]
     
-
-    cmp rcx, 0x0D
+    cmp rcx, 0x0D ;Enter Key
     je ChangePage
-
-    
 
     jmp .Start
 
@@ -193,6 +185,11 @@ ChangePage:
     mov rdx, [rcx]
     cmp rdx, 0 
     je DisplayFirmwareInfo
+
+    mov rcx, SelectedPage 
+    mov rdx, [rcx]
+    cmp rdx, 1 
+    je DisplayTextSelection
 
     jmp MenucheckKey
 

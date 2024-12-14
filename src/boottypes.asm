@@ -279,3 +279,13 @@ TimerRelative equ 2
  
 
 index: resq 1
+
+
+SIMPLE_TEXT_OUTPUT_MODE:
+    .MaxMode: resd 1
+    .Mode: resd 1
+    .Attribute: resd 1
+    .CursorColumn: resd 1
+    .CursorRow: resd 1
+    .CursorVisible: resb 1
+    .size: equ $ - SIMPLE_TEXT_OUTPUT_MODE
