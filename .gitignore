@@ -3,3 +3,4 @@ test.hdd
 *.bin
 *.o
 *.EFI
+bin/BOOTX64.EFI

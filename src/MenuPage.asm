@@ -17,6 +17,11 @@ DisplayMenu:
     call print_String
     call next_line
 
+    ;Mode Selection
+    mov rcx, .ModeSelection
+    call print_String
+    call next_line
+
     ;Highlight the Selection
     call HighlightSelection
 
@@ -191,6 +196,11 @@ ChangePage:
     cmp rdx, 1 
     je DisplayTextSelection
 
+    mov rcx, SelectedPage 
+    mov rdx, [rcx]
+    cmp rdx, 2
+    je DisplayModeSelection
+
     jmp MenucheckKey
 
 section .data
@@ -199,4 +209,4 @@ section .data
 
 SelectedPage: dq 1
 
-PageCount equ 2
+PageCount equ 3

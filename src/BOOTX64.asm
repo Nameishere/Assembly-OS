@@ -5,6 +5,7 @@
 %include "src/DisplayPage.asm"
 %include "src/MenuPage.asm"
 %include "src/TextSelectionPage.asm"
+%include "src/ModeSelectionPage.asm"
 
 section .text
 global _start
@@ -248,7 +249,6 @@ Print_Time:
 section .data
 
 read_character: dw 0, 0, 0
-SelectedMode: dq 0
 TimeEvent: dq 0
 
 Column: dq 0

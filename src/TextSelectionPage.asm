@@ -376,27 +376,6 @@ lefSelectionText:
     jmp TextSelectionCheckKey
 
 
-jmptoColumn:
-    ;rcx is the column
-    push rcx
-    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rcx]
-
-    add rbx, 16
-    mov rdx, 0
-    mov edx, [rbx]
-
-    pop rcx
-    push rdx
-    mov rax, rcx
-    mov rcx, colPos
-    mul rcx
-    mov rcx, rax
-    pop rdx
-
-    call SetCursorPosition
-    ret
-
 ChangeSelection:
     mov rcx, SelectedColumn 
     mov rdx, [rcx]
