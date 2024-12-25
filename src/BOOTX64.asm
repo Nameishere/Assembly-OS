@@ -19,6 +19,10 @@ _start:
     ;Setup System Tables
     call Table_setup
 
+    mov rdx, SelectedMode
+    mov rcx, [rdx]
+    call Change_Mode
+
     ;Reset Input Device
     mov rcx, 0
     call ResetDevice
@@ -39,7 +43,7 @@ _start:
     mov rdx, EFI_EVENT
     mov rcx, [rdx]
     mov rdx, TimerPeriodic
-    mov r8, 10000000 ; 1 second timer  
+    mov r8, 1 ;10000000 is 1 second
     call SetTimer
 
     ;Display Initial Page
@@ -89,8 +93,6 @@ Table_setup:
     ret
 
 DisplayEsc:
-    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rcx]
 
     add rbx, 12
     mov rdx, 0
@@ -124,6 +126,7 @@ DisplayEsc:
 
 DisplayTime:
 
+    push rax
     push rcx 
     push rdx
     push r8
@@ -139,37 +142,56 @@ DisplayTime:
     push r14
     push r15
 
-    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rcx]
+    mov rdx, .LastHighlighted
 
-    add rbx, 12
-    mov rdx, 0
-    mov edx, [rbx]
-    push rdx
-    add rbx, 4
-    mov rcx, 0
-    mov ecx, [rbx]
-    push rcx 
+    mov rcx, Highlighted
+    mov r8, [rcx]
+    mov [rdx], r8 
+
+    call SetColors
+    
+    ;print nothing to update cursor position 
+    mov rcx, .Temp
+    call print_unicode
+
+    call GetCursorColumn
+    push rcx
+    
+    call GetCursorRow
+    mov rdx, rcx
+    push rdx 
 
     mov r11, SelectedMode
     mov rcx, [r11]
-    mov rdx, Column
-    mov r8, Row
+    mov rdx, TimeColumn
+    mov r8, TimeRow
     call QueryMode
     
     dec rdx
     sub rcx, 20
     
     call SetCursorPosition
-
+    
     call GetTime
 
     call Print_Time
 
     ;return to old position 
-    pop rcx
     pop rdx
+    pop rcx
     call SetCursorPosition
+
+    mov rcx, .LastHighlighted
+    mov rdx, [rcx]
+    cmp rdx, 1
+    jne .nothighlight
+
+    Call SetHighlight
+
+
+    .nothighlight:
+
+
 
     pop r15
     pop r14
@@ -185,10 +207,12 @@ DisplayTime:
     pop r8
     pop rdx
     pop rcx 
-
-    mov rax, 0
+    pop rax
     
     ret
+    .Space: db " ", 0
+    .Temp: dw 0
+    .LastHighlighted: dq 0
 
 Print_Time:
     mov rcx, 0
@@ -251,8 +275,12 @@ section .data
 read_character: dw 0, 0, 0
 TimeEvent: dq 0
 
+TimeColumn: dd 0
+TimeRow: dd 0
+
 Column: dq 0
 Row: dq 0
+Test1: dq 0
 
 section .bss
 

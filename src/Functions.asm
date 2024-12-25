@@ -26,9 +26,9 @@ mov_data:
 print_unicode:
     ;rcx is pointer to string 
 
-    push rcx
-    call test_string
-    pop rcx
+    ; push rcx
+    ; call test_string
+    ; pop rcx
 
     mov rdx, rcx
     mov r12, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString
@@ -36,6 +36,10 @@ print_unicode:
     mov r12, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [r12] 
     call rbx 
+
+    cmp rax, 0
+    jne exception
+
     ret 
 
 
@@ -74,13 +78,12 @@ print_String:
         cmp r11, 0
         je .loop2_end
 
-        dec rsp 
-        mov r9b, 0 
-        mov [rsp], r9b
-
-        dec rsp 
+        sub rsp, 2
+        mov r9, 0 
         mov r9b, [rcx]
-        mov [rsp], r9b
+        ; shl r9, 8
+        mov [rsp], r9w
+
 
         dec r11 
         dec rcx 
@@ -140,10 +143,6 @@ print_Number:
         jmp .loop2_end 
         .if3_end:
 
-        dec rsp ;add zero to convert to unicode
-        mov bl, 0 
-        mov [rsp], bl
-
         push rdx 
         mov rax, rcx
         mov rcx, 10
@@ -153,9 +152,9 @@ print_Number:
         mov r8, rdx
         pop rdx 
 
-        dec rsp 
+        sub rsp, 2 
         add r8, 0x30
-        mov [rsp], r8b
+        mov [rsp], r8w
 
         inc r11 
         jmp .loop2_start
@@ -170,6 +169,7 @@ print_Number:
     mul r11
     add rsp, rax
     add rsp, 2
+    mov rax, 0
 
     ; call exception
     ret ;FEA686E ;FEA6800 ;FEA67F8
@@ -190,6 +190,8 @@ print_dot:
     mov rcx, [r11] 
     mov rdx, .dot
     call rbx 
+    cmp rax, 0 
+    jne exception
 
     pop r11
     pop r9
@@ -203,12 +205,12 @@ print_dot:
     .dot: dw ".",0
 
 Change_Mode: 
-    ;rax is the mode to change to 
-    mov rdx, rax 
-    mov rax, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetMode
-    mov rbx, [rax]
-    mov rax, EFI_SYSTEM_TABLE.ConOut
-    mov rcx, [rax]
+    ;rcx is the mode to change to 
+    mov rdx, rcx 
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.SetMode
+    mov rbx, [rcx]
+    mov r8, EFI_SYSTEM_TABLE.ConOut
+    mov rcx, [r8]
     call rbx 
     ret
 
@@ -255,6 +257,8 @@ SetCursorPosition:
     mov r11, EFI_SYSTEM_TABLE.ConOut
     mov rcx, [r11]
     call rbx 
+    ; cmp rax, 0
+    ; jne exception
     ret
 
 Clear_Screen:
@@ -366,15 +370,13 @@ ResetDevice:
     ret
     
 
+
 jmptoColumn:
     ;rcx is the column
     push rcx
-    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
-    mov rbx, [rcx]
 
-    add rbx, 16
-    mov rdx, 0
-    mov edx, [rbx]
+    call GetCursorRow
+    mov rdx, rcx
 
     pop rcx
     push rdx
@@ -385,4 +387,51 @@ jmptoColumn:
     pop rdx
 
     call SetCursorPosition
+
+
+    ret 
+FillColumn:
+    ;rcx is the column
+
+    mov rax, rcx
+    mov rcx, colPos
+    mul rcx
+    mov rdx, rax ; rdx is index of column 
+    .loopStart:
+    push rdx
+    call GetCursorColumn
+
+    pop rdx
+    cmp rcx, rdx
+
+    je .loopEnd
+
+    push rdx
+    mov rcx, .Space
+    call print_String
+    pop rdx
+    jmp .loopStart
+    .loopEnd:
+    ret
+    .Space: db " ", 0
+
+GetCursorRow:
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov rbx, [rcx]
+
+    add rbx, 16
+    mov rdx, 0
+    mov edx, [rbx]
+    mov rcx, rdx
+    ret
+
+
+GetCursorColumn:
+    mov rcx, EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.Mode
+    mov r8, [rcx]
+
+    add r8, 12
+    mov rdx, 0
+    mov edx, [r8]
+    mov rcx, rdx
     ret

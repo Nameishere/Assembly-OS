@@ -1,5 +1,14 @@
 DisplayFirmwareInfo: 
+
     call Clear_Screen
+
+    mov rcx, 0
+    mov rdx, 0
+    call SetCursorPosition
+
+    mov rcx, Test1
+    mov rdx, 0
+    mov [rcx], rdx
     
     ;Display Page Title: 
     mov rcx, .PageTitle
@@ -85,7 +94,8 @@ DisplaycheckKey:
     mov cx, [rdx]
     
     cmp rcx, 0x17 ;Escape key 
-    je ResetSystem
+    ; je ResetSystem
+    je exception
 
     cmp rcx, 0x05 ;Home Key 
     je DisplayMenu 

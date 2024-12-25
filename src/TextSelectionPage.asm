@@ -179,6 +179,15 @@ unHighlightSelectionText:
     mov rcx, [rcx]
     call print_String
 
+    call SelectedAttribute
+
+    mov rdx, SelectedColumn
+    mov rcx, [rdx]
+
+    inc rcx 
+
+    call FillColumn
+
     pop rcx
     pop rdx
     call SetCursorPosition
@@ -220,6 +229,15 @@ HighlightSelectionText:
     mov rcx, [rcx]
     call print_String
 
+    call SelectedAttribute
+
+    mov rdx, SelectedColumn
+    mov rcx, [rdx]
+
+    inc rcx 
+
+    call FillColumn
+
     call SetColors
 
     pop rcx
@@ -227,6 +245,53 @@ HighlightSelectionText:
     call SetCursorPosition
 
     ret
+
+
+SelectedAttribute:
+
+    mov rcx, SelectedColumn
+    mov rdx, [rcx]
+    cmp rdx, 0
+    jne .check2 
+    mov rcx, SelectedTextColor
+    mov r8, [rcx]
+    mov rcx, SelectedRow
+    mov rdx, [rcx]
+    cmp r8, rdx
+    je .Selected
+    jmp .done
+    
+    .check2:
+    mov rcx, SelectedColumn
+    mov rdx, [rcx]
+    cmp rdx, 1
+    jne .check3
+    mov rcx, SelectedBackgroundColor
+    mov r8, [rcx]
+    mov rcx, SelectedRow
+    mov rdx, [rcx]
+    cmp r8, rdx
+    je .Selected
+    jmp .done
+
+    .check3:
+    mov rcx, SelectedHighlightColor
+    mov r8, [rcx]
+    mov rcx, SelectedRow
+    mov rdx, [rcx]
+    cmp r8, rdx
+    je .Selected
+    jmp .done
+
+    .Selected:
+    mov rcx, .SelectArrow
+    call print_String
+
+    .done:
+    
+    ret
+    .SelectArrow: db " <-", 0 
+
     
 TextSelectionCheckKey:
 
@@ -424,6 +489,10 @@ ChangeSelection:
 
 SetColors:
 
+    mov rcx, Highlighted
+    mov rdx, 0
+    mov [rcx], rdx
+
     mov rcx, SelectedBackgroundColor
     mov rdx, [rcx]
 
@@ -437,8 +506,14 @@ SetColors:
     call SetTextColor
     ret
 
+Highlighted: dq 0
+
 
 SetHighlight:
+
+    mov rcx, Highlighted
+    mov rdx, 1
+    mov [rcx], rdx
 
     mov rcx, SelectedHighlightColor
     mov rdx, [rcx]
@@ -463,7 +538,7 @@ colPos equ 21
 numBackground equ 8
 numText equ 14
 SelectedBackgroundColor dq 0
-SelectedHighlightColor dq 3
+SelectedHighlightColor dq 1
 
 ColumnHeights:
     .Column1: dq 15
