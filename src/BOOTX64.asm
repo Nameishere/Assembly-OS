@@ -142,6 +142,10 @@ DisplayTime:
     push r14
     push r15
 
+    mov rcx, Column
+    mov rdx, [rcx]
+    push rdx
+
     mov rdx, .LastHighlighted
 
     mov rcx, Highlighted
@@ -191,6 +195,9 @@ DisplayTime:
 
     .nothighlight:
 
+    mov rcx, Column
+    pop rdx
+    mov [rcx], rdx
 
 
     pop r15
